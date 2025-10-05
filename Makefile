@@ -2,14 +2,14 @@
 # Inspired by .github/workflows/image.yml
 
 # Variables
-PROJECT_NAME ?= duckduckgo
+MCP_SERVER ?= duckduckgo
 DOCKER_REGISTRY ?= ghcr.io
 DOCKER_REPOSITORY ?= mudler/mcps
 DOCKER_TAG ?= latest
 GO_VERSION ?= 1.25.1
 
 # Docker image name
-IMAGE_NAME = $(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY)/$(PROJECT_NAME)
+IMAGE_NAME = $(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY)/$(MCP_SERVER)
 
 # Default target
 .PHONY: help
@@ -21,7 +21,7 @@ help: ## Show this help message
 build: ## Build the Docker image locally
 	@echo "Building Docker image: $(IMAGE_NAME):$(DOCKER_TAG)"
 	docker build \
-		--build-arg PROJECT_NAME=$(PROJECT_NAME) \
+		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
 		-f Dockerfile \
@@ -32,7 +32,7 @@ build-multiarch: ## Build multi-architecture Docker image (requires buildx)
 	@echo "Building multi-architecture Docker image: $(IMAGE_NAME):$(DOCKER_TAG)"
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
-		--build-arg PROJECT_NAME=$(PROJECT_NAME) \
+		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
 		-f Dockerfile \
@@ -47,7 +47,7 @@ run: build ## Build and run the container locally
 test-build: ## Test build without pushing (similar to PR build in CI)
 	@echo "Testing build (PR mode): $(IMAGE_NAME):$(DOCKER_TAG)"
 	docker build \
-		--build-arg PROJECT_NAME=$(PROJECT_NAME) \
+		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
 		-f Dockerfile \
@@ -70,13 +70,13 @@ clean-all: ## Remove all Docker images and containers
 
 .PHONY: go-build
 go-build: ## Build Go binary locally (without Docker)
-	@echo "Building Go binary for $(PROJECT_NAME)..."
-	cd $(PROJECT_NAME) && go build -o ../bin/$(PROJECT_NAME) .
+	@echo "Building Go binary for $(MCP_SERVER)..."
+	cd $(MCP_SERVER) && go build -o ../bin/$(MCP_SERVER) .
 
 .PHONY: go-run
 go-run: go-build ## Build and run Go binary locally
-	@echo "Running Go binary: $(PROJECT_NAME)"
-	./bin/$(PROJECT_NAME)
+	@echo "Running Go binary: $(MCP_SERVER)"
+	./bin/$(MCP_SERVER)
 
 .PHONY: go-test
 go-test: ## Run Go tests
@@ -135,7 +135,7 @@ tags: ## List available tags for the image
 # Utility targets
 .PHONY: version
 version: ## Show version information
-	@echo "Project: $(PROJECT_NAME)"
+	@echo "MCP: $(MCP_SERVER)"
 	@echo "Docker Image: $(IMAGE_NAME):$(DOCKER_TAG)"
 	@echo "Go Version: $(GO_VERSION)"
 	@echo "Docker Registry: $(DOCKER_REGISTRY)"
@@ -144,7 +144,7 @@ version: ## Show version information
 info: ## Show build information
 	@echo "Build Information:"
 	@echo "=================="
-	@echo "Project Name: $(PROJECT_NAME)"
+	@echo "MCP Name: $(MCP_SERVER)"
 	@echo "Image Name: $(IMAGE_NAME)"
 	@echo "Tag: $(DOCKER_TAG)"
 	@echo "Go Version: $(GO_VERSION)"
