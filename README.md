@@ -24,13 +24,13 @@ A web search server that provides search capabilities using DuckDuckGo.
 docker run -e MAX_RESULTS=10 ghcr.io/mudler/mcps/duckduckgo:latest
 ```
 
-**LocalAI configuration ( to add to the model config): **
+**LocalAI configuration ( to add to the model config):**
 ```yaml
 mcp:
   stdio: |
     {
       "mcpServers": {
-        "searxng": {
+        "ddg": {
           "command": "docker",
           "env": {
             "MAX_RESULTS": "10"
