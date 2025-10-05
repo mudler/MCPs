@@ -36,7 +36,7 @@ mcp:
             "MAX_RESULTS": "10"
           },
           "args": [
-            "run", "-i", "--rm",
+            "run", "-i", "--rm", "-e", "MAX_RESULTS",
             "ghcr.io/mudler/mcps/duckduckgo:master"
           ]
         }
