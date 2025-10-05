@@ -44,6 +44,63 @@ mcp:
     }
 ```
 
+### 🌤️ Weather Server
+
+A weather information server that provides current weather and forecast data for cities worldwide.
+
+**Features:**
+- Current weather conditions (temperature, wind, description)
+- Multi-day weather forecast
+- URL encoding for city names with special characters
+- JSON schema validation for inputs/outputs
+- HTTP timeout handling
+
+**Tool:**
+- `get_weather` - Get current weather and forecast for a city
+
+**API Response Format:**
+```json
+{
+  "temperature": "29 °C",
+  "wind": "20 km/h", 
+  "description": "Partly cloudy",
+  "forecast": [
+    {
+      "day": "1",
+      "temperature": "27 °C",
+      "wind": "12 km/h"
+    },
+    {
+      "day": "2", 
+      "temperature": "22 °C",
+      "wind": "8 km/h"
+    }
+  ]
+}
+```
+
+**Docker Image:**
+```bash
+docker run ghcr.io/mudler/mcps/weather:latest
+```
+
+**LocalAI configuration ( to add to the model config): **
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "weather": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/weather:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -65,6 +122,7 @@ make dev
 
 # Build specific server
 make MCP_SERVER=duckduckgo build
+make MCP_SERVER=weather build
 
 # Run tests and checks
 make ci-local
@@ -117,6 +175,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/duckduckgo:latest` - Latest DuckDuckGo server
 - `ghcr.io/mudler/mcps/duckduckgo:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/duckduckgo:master` - Development versions
+- `ghcr.io/mudler/mcps/weather:latest` - Latest Weather server
+- `ghcr.io/mudler/mcps/weather:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/weather:master` - Development versions
 
 ## Contributing
 
