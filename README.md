@@ -84,7 +84,7 @@ A weather information server that provides current weather and forecast data for
 docker run ghcr.io/mudler/mcps/weather:latest
 ```
 
-**LocalAI configuration ( to add to the model config): **
+**LocalAI configuration ( to add to the model config):**
 ```yaml
 mcp:
   stdio: |
