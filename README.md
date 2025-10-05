@@ -1,6 +1,6 @@
 # MCPS - Model Context Protocol Servers
 
-This repository contains Model Context Protocol (MCP) servers that provide various tools and capabilities for AI models.
+This repository contains Model Context Protocol (MCP) servers that provide various tools and capabilities for AI models. It was mainly done to have small examples to show for [LocalAI](https://localai.io/docs/features/mcp), but works as well with any MCP client.
 
 ## Available Servers
 
