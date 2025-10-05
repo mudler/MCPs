@@ -101,6 +101,60 @@ mcp:
     }
 ```
 
+### 🧠 Memory Server
+
+A persistent memory storage server that allows AI models to store, retrieve, and manage information across sessions.
+
+**Features:**
+- Persistent JSON file storage
+- Add, list, and remove memory entries
+- Unique ID generation for each entry
+- Timestamp tracking for entries
+- Configurable storage location
+- JSON schema validation for inputs/outputs
+
+**Tools:**
+- `add_memory` - Add a new entry to memory storage
+- `list_memory` - List all memory entries
+- `remove_memory` - Remove a memory entry by ID
+
+**Configuration:**
+- `MEMORY_FILE_PATH` - Environment variable to set the memory file path (default: `/data/memory.json`)
+
+**Memory Entry Format:**
+```json
+{
+  "id": "1703123456789000000",
+  "content": "User prefers coffee over tea",
+  "created_at": "2023-12-21T10:30:56.789Z"
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e MEMORY_FILE_PATH=/custom/path/memory.json ghcr.io/mudler/mcps/memory:latest
+```
+
+**LocalAI configuration ( to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "memory": {
+          "command": "docker",
+          "env": {
+            "MEMORY_FILE_PATH": "/data/memory.json"
+          },
+          "args": [
+            "run", "-i", "--rm", "-v", "/host/data:/data",
+            "ghcr.io/mudler/mcps/memory:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -123,6 +177,7 @@ make dev
 # Build specific server
 make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
+make MCP_SERVER=memory build
 
 # Run tests and checks
 make ci-local
@@ -178,6 +233,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/weather:latest` - Latest Weather server
 - `ghcr.io/mudler/mcps/weather:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/weather:master` - Development versions
+- `ghcr.io/mudler/mcps/memory:latest` - Latest Memory server
+- `ghcr.io/mudler/mcps/memory:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/memory:master` - Development versions
 
 ## Contributing
 
