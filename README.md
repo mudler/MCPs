@@ -117,6 +117,7 @@ A persistent memory storage server that allows AI models to store, retrieve, and
 - `add_memory` - Add a new entry to memory storage
 - `list_memory` - List all memory entries
 - `remove_memory` - Remove a memory entry by ID
+- `search_memory` - Search memory entries by content (case-insensitive)
 
 **Configuration:**
 - `MEMORY_FILE_PATH` - Environment variable to set the memory file path (default: `/data/memory.json`)
@@ -127,6 +128,21 @@ A persistent memory storage server that allows AI models to store, retrieve, and
   "id": "1703123456789000000",
   "content": "User prefers coffee over tea",
   "created_at": "2023-12-21T10:30:56.789Z"
+}
+```
+
+**Search Response Format:**
+```json
+{
+  "query": "coffee",
+  "results": [
+    {
+      "id": "1703123456789000000",
+      "content": "User prefers coffee over tea",
+      "created_at": "2023-12-21T10:30:56.789Z"
+    }
+  ],
+  "count": 1
 }
 ```
 

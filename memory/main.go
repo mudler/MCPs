@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -33,6 +34,10 @@ type RemoveMemoryInput struct {
 	ID string `json:"id" jsonschema:"the ID of the memory entry to remove"`
 }
 
+type SearchMemoryInput struct {
+	Query string `json:"query" jsonschema:"the search query to find matching memory entries"`
+}
+
 // Output types
 type AddMemoryOutput struct {
 	ID        string    `json:"id" jsonschema:"the ID of the created memory entry"`
@@ -47,6 +52,12 @@ type ListMemoryOutput struct {
 type RemoveMemoryOutput struct {
 	Success bool   `json:"success" jsonschema:"whether the removal was successful"`
 	Message string `json:"message" jsonschema:"status message"`
+}
+
+type SearchMemoryOutput struct {
+	Query   string        `json:"query" jsonschema:"the search query used"`
+	Results []MemoryEntry `json:"results" jsonschema:"matching memory entries"`
+	Count   int           `json:"count" jsonschema:"number of matching entries found"`
 }
 
 // Global variable to store the memory file path
@@ -182,6 +193,36 @@ func RemoveMemory(ctx context.Context, req *mcp.CallToolRequest, input RemoveMem
 	return nil, output, nil
 }
 
+// Search memory entries by content
+func SearchMemory(ctx context.Context, req *mcp.CallToolRequest, input SearchMemoryInput) (
+	*mcp.CallToolResult,
+	SearchMemoryOutput,
+	error,
+) {
+	storage, err := loadMemory()
+	if err != nil {
+		return nil, SearchMemoryOutput{}, err
+	}
+
+	// Perform case-insensitive search
+	query := strings.ToLower(input.Query)
+	var results []MemoryEntry
+
+	for _, entry := range storage.Entries {
+		if strings.Contains(strings.ToLower(entry.Content), query) {
+			results = append(results, entry)
+		}
+	}
+
+	output := SearchMemoryOutput{
+		Query:   input.Query,
+		Results: results,
+		Count:   len(results),
+	}
+
+	return nil, output, nil
+}
+
 func main() {
 	// Get memory file path from environment variable, default to ./memory.json
 	memoryFilePath = os.Getenv("MEMORY_FILE_PATH")
@@ -209,6 +250,11 @@ func main() {
 		Name:        "remove_memory",
 		Description: "Remove a memory entry by ID",
 	}, RemoveMemory)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_memory",
+		Description: "Search memory entries by content",
+	}, SearchMemory)
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
