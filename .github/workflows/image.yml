@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mcp: [duckduckgo, weather]
+        mcp: [duckduckgo, weather, memory]
     permissions:
       packages: write
       contents: read
