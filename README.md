@@ -184,6 +184,8 @@ A Home Assistant integration server that allows AI models to interact with and c
 - `list_entities` - List all entities in Home Assistant
 - `get_services` - Get all available services in Home Assistant
 - `call_service` - Call a service in Home Assistant (e.g., turn_on, turn_off, toggle)
+- `search_entities` - Search for entities by keyword (searches across entity ID, domain, state, and friendly name)
+- `search_services` - Search for services by keyword (searches across service domain and name)
 
 **Configuration:**
 - `HA_TOKEN` - Home Assistant API token (required)
@@ -214,6 +216,20 @@ A Home Assistant integration server that allows AI models to interact with and c
   "domain": "light",
   "service": "turn_on",
   "entity_id": "light.living_room"
+}
+```
+
+**Search Entities Example:**
+```json
+{
+  "keyword": "living room light"
+}
+```
+
+**Search Services Example:**
+```json
+{
+  "keyword": "turn_on"
 }
 ```
 

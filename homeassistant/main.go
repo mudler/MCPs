@@ -29,6 +29,14 @@ type CallServiceInput struct {
 	EntityID string `json:"entity_id" jsonschema:"the entity ID (e.g., 'switch.switch_1')"`
 }
 
+type SearchEntitiesInput struct {
+	Keyword string `json:"keyword" jsonschema:"search keyword to match in entity ID, domain, state, or friendly name"`
+}
+
+type SearchServicesInput struct {
+	Keyword string `json:"keyword" jsonschema:"search keyword to match in service domain or name"`
+}
+
 // Output types
 type Entity struct {
 	EntityID     string      `json:"entity_id" jsonschema:"the entity ID"`
@@ -62,6 +70,16 @@ type GetServicesOutput struct {
 type CallServiceOutput struct {
 	Success bool   `json:"success" jsonschema:"whether the call was successful"`
 	Message string `json:"message" jsonschema:"status message"`
+}
+
+type SearchEntitiesOutput struct {
+	Entities []Entity `json:"entities" jsonschema:"list of matching entities"`
+	Count    int      `json:"count" jsonschema:"number of matching entities"`
+}
+
+type SearchServicesOutput struct {
+	Services []Service `json:"services" jsonschema:"list of matching services"`
+	Count    int       `json:"count" jsonschema:"number of matching services"`
 }
 
 // ListEntities returns all entities in Home Assistant
@@ -190,6 +208,131 @@ func CallService(ctx context.Context, req *mcp.CallToolRequest, input CallServic
 	return nil, output, nil
 }
 
+// SearchEntities searches for entities matching the keyword
+func SearchEntities(ctx context.Context, req *mcp.CallToolRequest, input SearchEntitiesInput) (
+	*mcp.CallToolResult,
+	SearchEntitiesOutput,
+	error,
+) {
+	states, err := client.GetStates(ctx)
+	if err != nil {
+		return nil, SearchEntitiesOutput{}, fmt.Errorf("failed to get states: %w", err)
+	}
+
+	keyword := strings.ToLower(input.Keyword)
+	var matchingEntities []Entity
+
+	for _, state := range states {
+		// Extract domain from entity ID
+		data := strings.Split(state.EntityId, ".")
+		domain := ""
+		if len(data) > 0 {
+			domain = data[0]
+		}
+
+		// Check if keyword matches in entity ID
+		entityIDMatch := strings.Contains(strings.ToLower(state.EntityId), keyword)
+
+		// Check if keyword matches in domain
+		domainMatch := strings.Contains(strings.ToLower(domain), keyword)
+
+		// Check if keyword matches in state
+		stateMatch := strings.Contains(strings.ToLower(state.State), keyword)
+
+		// Check if keyword matches in friendly name
+		friendlyNameMatch := false
+		if friendlyName, ok := state.Attributes["friendly_name"].(string); ok {
+			friendlyNameMatch = strings.Contains(strings.ToLower(friendlyName), keyword)
+		}
+
+		// If keyword matches in any field, include this entity
+		if entityIDMatch || domainMatch || stateMatch || friendlyNameMatch {
+			friendlyName := state.Attributes["friendly_name"]
+			entity := Entity{
+				EntityID:     state.EntityId,
+				State:        state.State,
+				FriendlyName: friendlyName,
+				Domain:       domain,
+			}
+			matchingEntities = append(matchingEntities, entity)
+		}
+	}
+
+	output := SearchEntitiesOutput{
+		Entities: matchingEntities,
+		Count:    len(matchingEntities),
+	}
+
+	return nil, output, nil
+}
+
+// SearchServices searches for services matching the keyword
+func SearchServices(ctx context.Context, req *mcp.CallToolRequest, input SearchServicesInput) (
+	*mcp.CallToolResult,
+	SearchServicesOutput,
+	error,
+) {
+	services, err := client.GetServices(ctx)
+	if err != nil {
+		return nil, SearchServicesOutput{}, fmt.Errorf("failed to get services: %w", err)
+	}
+
+	keyword := strings.ToLower(input.Keyword)
+	var result []Service
+
+	for _, s := range services {
+		// Check if keyword matches in domain
+		domainMatch := strings.Contains(strings.ToLower(s.Domain), keyword)
+
+		for serviceName, serviceInfo := range s.Services {
+			// Check if keyword matches in service name
+			serviceNameMatch := strings.Contains(strings.ToLower(serviceName), keyword)
+
+			// If keyword matches in domain or service name, include this service
+			if domainMatch || serviceNameMatch {
+				// Convert service fields to our format
+				fields := make(map[string]ServiceField)
+				for fieldName, fieldInfo := range serviceInfo.Fields {
+					field := ServiceField{
+						Description: fieldInfo.Description,
+					}
+
+					// Set example if available (convert to string if needed)
+					if fieldInfo.Example != nil {
+						switch v := fieldInfo.Example.(type) {
+						case string:
+							field.Example = v
+						default:
+							field.Example = fmt.Sprintf("%v", v)
+						}
+					}
+
+					// Set required flag if available
+					if fieldInfo.Selector != nil {
+						field.Required = true
+					}
+
+					fields[fieldName] = field
+				}
+
+				service := Service{
+					Domain: s.Domain,
+					Name:   serviceName,
+					Fields: fields,
+				}
+				result = append(result, service)
+			}
+		}
+	}
+
+	output := SearchServicesOutput{
+		Services: result,
+		Count:    len(result),
+	}
+
+	return nil, output, nil
+}
+
 func main() {
 	// Get configuration from environment variables
 	token := os.Getenv("HA_TOKEN")
@@ -238,6 +381,16 @@ func main() {
 		Name:        "call_service",
 		Description: "Call a service in Home Assistant (e.g., turn_on, turn_off, toggle)",
 	}, CallService)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_entities",
+		Description: "Search for entities in Home Assistant by keyword (searches across entity ID, domain, state, and friendly name)",
+	}, SearchEntities)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_services",
+		Description: "Search for services in Home Assistant by keyword (searches across service domain and name)",
+	}, SearchServices)
 
 	// Run the server
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
