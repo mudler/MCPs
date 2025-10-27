@@ -171,6 +171,78 @@ mcp:
     }
 ```
 
+### 🏠 Home Assistant Server
+
+A Home Assistant integration server that allows AI models to interact with and control Home Assistant entities and services.
+
+**Features:**
+- List all entities and their current states
+- Get all available services with detailed information
+- Call services to control devices (turn_on, turn_off, toggle, etc.)
+
+**Tools:**
+- `list_entities` - List all entities in Home Assistant
+- `get_services` - Get all available services in Home Assistant
+- `call_service` - Call a service in Home Assistant (e.g., turn_on, turn_off, toggle)
+
+**Configuration:**
+- `HA_TOKEN` - Home Assistant API token (required)
+- `HA_HOST` - Home Assistant host URL (default: `http://localhost:8123`)
+
+**Entity Response Format:**
+```json
+{
+  "entities": [
+    {
+      "entity_id": "light.living_room",
+      "state": "on",
+      "friendly_name": "Living Room Light",
+      "attributes": {
+        "friendly_name": "Living Room Light",
+        "brightness": 255
+      },
+      "domain": "light"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Service Call Example:**
+```json
+{
+  "domain": "light",
+  "service": "turn_on",
+  "entity_id": "light.living_room"
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e HA_TOKEN="your-token-here" -e HA_HOST="http://IP:PORT" ghcr.io/mudler/mcps/homeassistant:latest
+```
+
+**LocalAI configuration ( to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "homeassistant": {
+          "command": "docker",
+          "env": {
+            "HA_TOKEN": "your-home-assistant-token",
+            "HA_HOST": "http://"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/homeassistant:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -252,6 +324,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/memory:latest` - Latest Memory server
 - `ghcr.io/mudler/mcps/memory:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/memory:master` - Development versions
+- `ghcr.io/mudler/mcps/homeassistant:latest` - Latest Home Assistant server
+- `ghcr.io/mudler/mcps/homeassistant:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/homeassistant:master` - Development versions
 
 ## Contributing
 

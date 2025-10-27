@@ -3,6 +3,7 @@ module github.com/mudler/mcps
 go 1.24.7
 
 require (
+	github.com/mkelcik/go-ha-client v1.0.0
 	github.com/modelcontextprotocol/go-sdk v1.0.0
 	github.com/tmc/langchaingo v0.1.13
 )
