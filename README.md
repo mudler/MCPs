@@ -259,6 +259,100 @@ mcp:
     }
 ```
 
+### 🔧 Script Runner Server
+
+A flexible script and program execution server that allows AI models to run pre-defined scripts and programs as tools. Scripts can be defined inline or via file paths, and programs can be executed directly.
+
+**Features:**
+- Execute scripts from file paths or inline content
+- Run arbitrary programs/commands
+- Automatic interpreter detection (shebang or file extension)
+- Configurable timeouts per script/program
+- Custom working directories and environment variables
+- Comprehensive output capture (stdout, stderr, exit code, duration)
+
+**Configuration:**
+- `SCRIPTS` - JSON string defining scripts/programs (required)
+
+**Script Configuration Format:**
+```json
+[
+  {
+    "name": "hello_world",
+    "description": "A simple hello world script",
+    "content": "#!/bin/bash\necho 'Hello, World!'",
+    "timeout": 10
+  },
+  {
+    "name": "run_python",
+    "description": "Run a Python script from file",
+    "path": "/scripts/process_data.py",
+    "interpreter": "python3",
+    "timeout": 30,
+    "working_dir": "/data"
+  },
+  {
+    "name": "list_files",
+    "description": "List files in a directory",
+    "command": "ls",
+    "timeout": 5
+  }
+]
+```
+
+**Executor Object Fields:**
+- `name` (string, required): Tool name (must be valid identifier)
+- `description` (string, required): Tool description
+- `content` (string, optional): Inline script content (mutually exclusive with `path` and `command`)
+- `path` (string, optional): Path to script file (mutually exclusive with `content` and `command`)
+- `command` (string, optional): Command/program to execute (mutually exclusive with `content` and `path`)
+- `interpreter` (string, optional): Interpreter to use (default: auto-detect from shebang or file extension)
+- `timeout` (int, optional): Timeout in seconds (default: 30)
+- `working_dir` (string, optional): Working directory for execution
+- `env` (map[string]string, optional): Additional environment variables
+
+**Execution Input:**
+```json
+{
+  "args": ["arg1", "arg2"]
+}
+```
+
+**Execution Output:**
+```json
+{
+  "stdout": "Hello, World!\n",
+  "stderr": "",
+  "exit_code": 0,
+  "duration_ms": 15
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e SCRIPTS='[{"name":"hello","description":"Hello script","content":"#!/bin/bash\necho hello"}]' ghcr.io/mudler/mcps/scripts:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "scripts": {
+          "command": "docker",
+          "env": {
+            "SCRIPTS": "[{\"name\":\"hello\",\"description\":\"Hello script\",\"content\":\"#!/bin/bash\\necho hello\"},{\"name\":\"list_files\",\"description\":\"List files\",\"command\":\"ls\"}]"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/scripts:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -282,6 +376,7 @@ make dev
 make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
 make MCP_SERVER=memory build
+make MCP_SERVER=scripts build
 
 # Run tests and checks
 make ci-local
@@ -343,6 +438,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/homeassistant:latest` - Latest Home Assistant server
 - `ghcr.io/mudler/mcps/homeassistant:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/homeassistant:master` - Development versions
+- `ghcr.io/mudler/mcps/scripts:latest` - Latest Script Runner server
+- `ghcr.io/mudler/mcps/scripts:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/scripts:master` - Development versions
 
 ## Contributing
 
