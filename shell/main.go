@@ -58,8 +58,15 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 
 	// Parse shell command - support both single command and command with args
 	shellParts := strings.Fields(shellCmd)
+
 	shellExec := shellParts[0]
-	shellArgs := append(shellParts[1:], input.Script)
+	shellArgs := []string{}
+
+	if len(shellParts) > 1 {
+		shellArgs = append(shellParts[1:], input.Script)
+	} else {
+		shellArgs = []string{"-c", input.Script}
+	}
 
 	// Execute script using the configured shell
 	cmd := exec.CommandContext(cmdCtx, shellExec, shellArgs...)
@@ -111,9 +118,14 @@ func main() {
 		Version: "v1.0.0",
 	}, nil)
 
+	configurableName := os.GetEnv("TOOL_NAME")
+	if configurableName == "" {
+		configurableName = "execute_command"
+	}
+
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "execute_command",
+		Name:        configurableName,
 		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh')",
 	}, ExecuteCommand)
 

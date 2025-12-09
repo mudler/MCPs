@@ -322,6 +322,101 @@ mcp:
     }
 ```
 
+### 🔐 SSH Server
+
+An SSH server that allows AI models to connect to remote SSH hosts and execute shell scripts.
+
+**Features:**
+- Connect to remote SSH hosts
+- Execute shell scripts on remote hosts
+- Support for password and key-based authentication
+- Configurable remote shell command (default: `sh -c`)
+- Separate stdout and stderr capture
+- Exit code reporting
+- Configurable timeout (default: 30 seconds)
+- JSON schema validation for inputs/outputs
+
+**Tool:**
+- `execute_script` - Execute a shell script on a remote SSH host and return the output, exit code, and any errors
+
+**Configuration:**
+- `SSH_HOST` - Default SSH host (can be overridden per request)
+- `SSH_PORT` - Default SSH port (default: 22)
+- `SSH_USER` - Default SSH username (can be overridden per request)
+- `SSH_PASSWORD` - Default SSH password (can be overridden per request, or use SSH_KEY_PATH)
+- `SSH_KEY_PATH` - Path to SSH private key file (alternative to password authentication)
+- `SSH_KEY_PASSPHRASE` - Passphrase for encrypted SSH private key (if needed)
+- `SSH_SHELL_CMD` - Remote shell command to use (default: `sh -c`)
+
+**Input Format:**
+```json
+{
+  "host": "example.com",
+  "port": 22,
+  "user": "username",
+  "password": "password",
+  "script": "ls -la /tmp",
+  "timeout": 30
+}
+```
+
+Or using key-based authentication:
+```json
+{
+  "host": "example.com",
+  "user": "username",
+  "key_path": "/path/to/private/key",
+  "script": "ls -la /tmp",
+  "timeout": 30
+}
+```
+
+**Output Format:**
+```json
+{
+  "host": "example.com",
+  "script": "ls -la /tmp",
+  "stdout": "total 1234\ndrwxrwxrwt...",
+  "stderr": "",
+  "exit_code": 0,
+  "success": true,
+  "error": ""
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e SSH_HOST=example.com -e SSH_USER=user -e SSH_PASSWORD=pass ghcr.io/mudler/mcps/ssh:latest
+```
+
+Or with key-based authentication:
+```bash
+docker run -e SSH_HOST=example.com -e SSH_USER=user -e SSH_KEY_PATH=/path/to/key -v /host/keys:/path/to/key ghcr.io/mudler/mcps/ssh:latest
+```
+
+**LocalAI configuration ( to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "ssh": {
+          "command": "docker",
+          "env": {
+            "SSH_HOST": "example.com",
+            "SSH_USER": "username",
+            "SSH_PASSWORD": "password",
+            "SSH_SHELL_CMD": "bash -c"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/ssh:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🔧 Script Runner Server
 
 A flexible script and program execution server that allows AI models to run pre-defined scripts and programs as tools. Scripts can be defined inline or via file paths, and programs can be executed directly.
@@ -440,6 +535,7 @@ make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
 make MCP_SERVER=memory build
 make MCP_SERVER=shell build
+make MCP_SERVER=ssh build
 make MCP_SERVER=scripts build
 
 # Run tests and checks
@@ -502,6 +598,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/shell:latest` - Latest Shell server
 - `ghcr.io/mudler/mcps/shell:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/shell:master` - Development versions
+- `ghcr.io/mudler/mcps/ssh:latest` - Latest SSH server
+- `ghcr.io/mudler/mcps/ssh:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/ssh:master` - Development versions
 - `ghcr.io/mudler/mcps/homeassistant:latest` - Latest Home Assistant server
 - `ghcr.io/mudler/mcps/homeassistant:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/homeassistant:master` - Development versions
