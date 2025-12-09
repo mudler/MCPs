@@ -259,6 +259,69 @@ mcp:
     }
 ```
 
+### 🐚 Shell Server
+
+A shell script execution server that allows AI models to execute shell scripts and commands.
+
+**Features:**
+- Execute shell scripts with full shell capabilities
+- Configurable shell command (default: `sh -c`)
+- Separate stdout and stderr capture
+- Exit code reporting
+- Configurable timeout (default: 30 seconds)
+- JSON schema validation for inputs/outputs
+
+**Tool:**
+- `execute_command` - Execute a shell script and return the output, exit code, and any errors
+
+**Configuration:**
+- `SHELL_CMD` - Environment variable to set the shell command to use (default: `sh`). Can include arguments, e.g., `bash -x` or `zsh`
+
+**Input Format:**
+```json
+{
+  "script": "ls -la /tmp",
+  "timeout": 30
+}
+```
+
+**Output Format:**
+```json
+{
+  "script": "ls -la /tmp",
+  "stdout": "total 1234\ndrwxrwxrwt...",
+  "stderr": "",
+  "exit_code": 0,
+  "success": true,
+  "error": ""
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e SHELL_CMD=bash ghcr.io/mudler/mcps/shell:latest
+```
+
+**LocalAI configuration ( to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "shell": {
+          "command": "docker",
+          "env": {
+            "SHELL_CMD": "bash"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/shell:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🔧 Script Runner Server
 
 A flexible script and program execution server that allows AI models to run pre-defined scripts and programs as tools. Scripts can be defined inline or via file paths, and programs can be executed directly.
@@ -376,6 +439,7 @@ make dev
 make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
 make MCP_SERVER=memory build
+make MCP_SERVER=shell build
 make MCP_SERVER=scripts build
 
 # Run tests and checks
@@ -435,6 +499,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/memory:latest` - Latest Memory server
 - `ghcr.io/mudler/mcps/memory:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/memory:master` - Development versions
+- `ghcr.io/mudler/mcps/shell:latest` - Latest Shell server
+- `ghcr.io/mudler/mcps/shell:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/shell:master` - Development versions
 - `ghcr.io/mudler/mcps/homeassistant:latest` - Latest Home Assistant server
 - `ghcr.io/mudler/mcps/homeassistant:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/homeassistant:master` - Development versions
