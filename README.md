@@ -513,7 +513,7 @@ mcp:
 
 ### 📚 LocalRecall Server
 
-A knowledge base management server that provides tools to interact with LocalRecall's REST API for managing collections, searching content, and managing documents.
+A knowledge base management server that provides tools to interact with [LocalRecall](https://github.com/mudler/LocalRecall)'s REST API for managing collections, searching content, and managing documents.
 
 **Features:**
 - Search content in collections
