@@ -511,6 +511,106 @@ mcp:
     }
 ```
 
+### 📚 LocalRecall Server
+
+A knowledge base management server that provides tools to interact with LocalRecall's REST API for managing collections, searching content, and managing documents.
+
+**Features:**
+- Search content in collections
+- Create and reset collections
+- Add documents to collections
+- List collections and files
+- Delete entries from collections
+- Configurable tool enablement for security
+
+**Tools:**
+- `search` - Search content in a LocalRecall collection
+- `create_collection` - Create a new collection
+- `reset_collection` - Reset (clear) a collection
+- `add_document` - Add a document to a collection
+- `list_collections` - List all collections
+- `list_files` - List files in a collection
+- `delete_entry` - Delete an entry from a collection
+
+**Configuration:**
+- `LOCALRECALL_URL` - Base URL for LocalRecall API (default: `http://localhost:8080`)
+- `LOCALRECALL_API_KEY` - Optional API key for authentication (sent as `Authorization: Bearer <key>`)
+- `LOCALRECALL_ENABLED_TOOLS` - Comma-separated list of tools to enable (default: all tools enabled). Valid values: `search`, `create_collection`, `reset_collection`, `add_document`, `list_collections`, `list_files`, `delete_entry`
+
+**Search Input Format:**
+```json
+{
+  "collection_name": "myCollection",
+  "query": "search term",
+  "max_results": 5
+}
+```
+
+**Search Output Format:**
+```json
+{
+  "query": "search term",
+  "max_results": 5,
+  "results": [
+    {
+      "content": "...",
+      "metadata": {...}
+    }
+  ],
+  "count": 1
+}
+```
+
+**Add Document Input Format:**
+```json
+{
+  "collection_name": "myCollection",
+  "file_path": "/path/to/file.txt",
+  "filename": "file.txt"
+}
+```
+
+Or with inline content:
+```json
+{
+  "collection_name": "myCollection",
+  "file_content": "Document content here",
+  "filename": "document.txt"
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_API_KEY=your-key-here ghcr.io/mudler/mcps/localrecall:latest
+```
+
+**Enable specific tools only:**
+```bash
+docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_ENABLED_TOOLS="search,list_collections,list_files" ghcr.io/mudler/mcps/localrecall:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "localrecall": {
+          "command": "docker",
+          "env": {
+            "LOCALRECALL_URL": "http://localhost:8080",
+            "LOCALRECALL_API_KEY": "your-api-key",
+            "LOCALRECALL_ENABLED_TOOLS": "search,list_collections,add_document"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/localrecall:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -537,6 +637,7 @@ make MCP_SERVER=memory build
 make MCP_SERVER=shell build
 make MCP_SERVER=ssh build
 make MCP_SERVER=scripts build
+make MCP_SERVER=localrecall build
 
 # Run tests and checks
 make ci-local
@@ -607,6 +708,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/scripts:latest` - Latest Script Runner server
 - `ghcr.io/mudler/mcps/scripts:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/scripts:master` - Development versions
+- `ghcr.io/mudler/mcps/localrecall:latest` - Latest LocalRecall server
+- `ghcr.io/mudler/mcps/localrecall:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/localrecall:master` - Development versions
 
 ## Contributing
 
