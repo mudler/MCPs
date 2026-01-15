@@ -20,6 +20,7 @@ import (
 var httpClient *http.Client
 var localRecallURL string
 var apiKey string
+var defaultCollectionName string
 
 // LocalRecall API response structure
 type APIResponse struct {
@@ -42,6 +43,11 @@ type SearchInput struct {
 	MaxResults     int    `json:"max_results,omitempty" jsonschema:"maximum number of results to return (default: 5)"`
 }
 
+type SearchInputWithoutCollection struct {
+	Query      string `json:"query" jsonschema:"the search query"`
+	MaxResults int    `json:"max_results,omitempty" jsonschema:"maximum number of results to return (default: 5)"`
+}
+
 type CreateCollectionInput struct {
 	Name string `json:"name" jsonschema:"the name of the collection to create"`
 }
@@ -57,13 +63,26 @@ type AddDocumentInput struct {
 	Filename       string `json:"filename" jsonschema:"the filename for the document"`
 }
 
+type AddDocumentInputWithoutCollection struct {
+	FilePath    string `json:"file_path,omitempty" jsonschema:"path to the file to upload (mutually exclusive with file_content)"`
+	FileContent string `json:"file_content,omitempty" jsonschema:"file content as string (mutually exclusive with file_path)"`
+	Filename    string `json:"filename" jsonschema:"the filename for the document"`
+}
+
 type ListFilesInput struct {
 	CollectionName string `json:"collection_name" jsonschema:"the name of the collection"`
+}
+
+type ListFilesInputWithoutCollection struct {
 }
 
 type DeleteEntryInput struct {
 	CollectionName string `json:"collection_name" jsonschema:"the name of the collection"`
 	Entry          string `json:"entry" jsonschema:"the filename of the entry to delete"`
+}
+
+type DeleteEntryInputWithoutCollection struct {
+	Entry string `json:"entry" jsonschema:"the filename of the entry to delete"`
 }
 
 // Output types for tools
@@ -226,16 +245,35 @@ func Search(ctx context.Context, req *mcp.CallToolRequest, input SearchInput) (
 	SearchOutput,
 	error,
 ) {
-	if input.MaxResults == 0 {
-		input.MaxResults = 5
+	return searchWithCollection(ctx, input.CollectionName, input.Query, input.MaxResults)
+}
+
+// SearchWithoutCollection searches content in a LocalRecall collection using default collection
+func SearchWithoutCollection(ctx context.Context, req *mcp.CallToolRequest, input SearchInputWithoutCollection) (
+	*mcp.CallToolResult,
+	SearchOutput,
+	error,
+) {
+	return searchWithCollection(ctx, defaultCollectionName, input.Query, input.MaxResults)
+}
+
+// searchWithCollection is the internal implementation for search
+func searchWithCollection(ctx context.Context, collectionName, query string, maxResults int) (
+	*mcp.CallToolResult,
+	SearchOutput,
+	error,
+) {
+
+	if maxResults == 0 {
+		maxResults = 5
 	}
 
 	requestBody := map[string]interface{}{
-		"query":       input.Query,
-		"max_results": input.MaxResults,
+		"query":       query,
+		"max_results": maxResults,
 	}
 
-	apiResp, err := makeRequest(ctx, "POST", fmt.Sprintf("/api/collections/%s/search", input.CollectionName), requestBody)
+	apiResp, err := makeRequest(ctx, "POST", fmt.Sprintf("/api/collections/%s/search", collectionName), requestBody)
 	if err != nil {
 		return nil, SearchOutput{}, err
 	}
@@ -261,8 +299,8 @@ func Search(ctx context.Context, req *mcp.CallToolRequest, input SearchInput) (
 	}
 
 	output := SearchOutput{
-		Query:      input.Query,
-		MaxResults: input.MaxResults,
+		Query:      query,
+		MaxResults: maxResults,
 		Results:    results,
 		Count:      count,
 	}
@@ -340,25 +378,43 @@ func AddDocument(ctx context.Context, req *mcp.CallToolRequest, input AddDocumen
 	AddDocumentOutput,
 	error,
 ) {
-	var fileContent []byte
+	return addDocumentWithCollection(ctx, input.CollectionName, input.FilePath, input.FileContent, input.Filename)
+}
+
+// AddDocumentWithoutCollection adds a document to a collection using default collection
+func AddDocumentWithoutCollection(ctx context.Context, req *mcp.CallToolRequest, input AddDocumentInputWithoutCollection) (
+	*mcp.CallToolResult,
+	AddDocumentOutput,
+	error,
+) {
+	return addDocumentWithCollection(ctx, defaultCollectionName, input.FilePath, input.FileContent, input.Filename)
+}
+
+// addDocumentWithCollection is the internal implementation for add document
+func addDocumentWithCollection(ctx context.Context, collectionName, filePath, fileContent, filename string) (
+	*mcp.CallToolResult,
+	AddDocumentOutput,
+	error,
+) {
+	var fileContentBytes []byte
 	var err error
 
-	if input.FilePath != "" && input.FileContent != "" {
+	if filePath != "" && fileContent != "" {
 		return nil, AddDocumentOutput{}, fmt.Errorf("cannot specify both file_path and file_content")
 	}
 
-	if input.FilePath != "" {
-		fileContent, err = os.ReadFile(input.FilePath)
+	if filePath != "" {
+		fileContentBytes, err = os.ReadFile(filePath)
 		if err != nil {
 			return nil, AddDocumentOutput{}, fmt.Errorf("failed to read file: %w", err)
 		}
-	} else if input.FileContent != "" {
-		fileContent = []byte(input.FileContent)
+	} else if fileContent != "" {
+		fileContentBytes = []byte(fileContent)
 	} else {
 		return nil, AddDocumentOutput{}, fmt.Errorf("must specify either file_path or file_content")
 	}
 
-	apiResp, err := makeMultipartRequest(ctx, fmt.Sprintf("/api/collections/%s/upload", input.CollectionName), input.Filename, fileContent)
+	apiResp, err := makeMultipartRequest(ctx, fmt.Sprintf("/api/collections/%s/upload", collectionName), filename, fileContentBytes)
 	if err != nil {
 		return nil, AddDocumentOutput{}, err
 	}
@@ -375,8 +431,8 @@ func AddDocument(ctx context.Context, req *mcp.CallToolRequest, input AddDocumen
 	}
 
 	output := AddDocumentOutput{
-		Filename:   input.Filename,
-		Collection: input.CollectionName,
+		Filename:   filename,
+		Collection: collectionName,
 		UploadedAt: uploadedAt,
 	}
 
@@ -428,7 +484,25 @@ func ListFiles(ctx context.Context, req *mcp.CallToolRequest, input ListFilesInp
 	ListFilesOutput,
 	error,
 ) {
-	apiResp, err := makeRequest(ctx, "GET", fmt.Sprintf("/api/collections/%s/entries", input.CollectionName), nil)
+	return listFilesWithCollection(ctx, input.CollectionName)
+}
+
+// ListFilesWithoutCollection lists files in a collection using default collection
+func ListFilesWithoutCollection(ctx context.Context, req *mcp.CallToolRequest, input ListFilesInputWithoutCollection) (
+	*mcp.CallToolResult,
+	ListFilesOutput,
+	error,
+) {
+	return listFilesWithCollection(ctx, defaultCollectionName)
+}
+
+// listFilesWithCollection is the internal implementation for list files
+func listFilesWithCollection(ctx context.Context, collectionName string) (
+	*mcp.CallToolResult,
+	ListFilesOutput,
+	error,
+) {
+	apiResp, err := makeRequest(ctx, "GET", fmt.Sprintf("/api/collections/%s/entries", collectionName), nil)
 	if err != nil {
 		return nil, ListFilesOutput{}, err
 	}
@@ -454,7 +528,7 @@ func ListFiles(ctx context.Context, req *mcp.CallToolRequest, input ListFilesInp
 	}
 
 	output := ListFilesOutput{
-		Collection: input.CollectionName,
+		Collection: collectionName,
 		Entries:    entries,
 		Count:      count,
 	}
@@ -468,11 +542,29 @@ func DeleteEntry(ctx context.Context, req *mcp.CallToolRequest, input DeleteEntr
 	DeleteEntryOutput,
 	error,
 ) {
+	return deleteEntryWithCollection(ctx, input.CollectionName, input.Entry)
+}
+
+// DeleteEntryWithoutCollection deletes an entry from a collection using default collection
+func DeleteEntryWithoutCollection(ctx context.Context, req *mcp.CallToolRequest, input DeleteEntryInputWithoutCollection) (
+	*mcp.CallToolResult,
+	DeleteEntryOutput,
+	error,
+) {
+	return deleteEntryWithCollection(ctx, defaultCollectionName, input.Entry)
+}
+
+// deleteEntryWithCollection is the internal implementation for delete entry
+func deleteEntryWithCollection(ctx context.Context, collectionName, entry string) (
+	*mcp.CallToolResult,
+	DeleteEntryOutput,
+	error,
+) {
 	requestBody := map[string]interface{}{
-		"entry": input.Entry,
+		"entry": entry,
 	}
 
-	apiResp, err := makeRequest(ctx, "DELETE", fmt.Sprintf("/api/collections/%s/entry/delete", input.CollectionName), requestBody)
+	apiResp, err := makeRequest(ctx, "DELETE", fmt.Sprintf("/api/collections/%s/entry/delete", collectionName), requestBody)
 	if err != nil {
 		return nil, DeleteEntryOutput{}, err
 	}
@@ -483,14 +575,13 @@ func DeleteEntry(ctx context.Context, req *mcp.CallToolRequest, input DeleteEntr
 		return nil, DeleteEntryOutput{}, fmt.Errorf("unexpected response data format")
 	}
 
-	deletedEntry := input.Entry
 	remainingEntries := []string{}
 	entryCount := 0
 
 	if remainingData, ok := data["remaining_entries"].([]interface{}); ok {
 		for _, e := range remainingData {
-			if entry, ok := e.(string); ok {
-				remainingEntries = append(remainingEntries, entry)
+			if entryStr, ok := e.(string); ok {
+				remainingEntries = append(remainingEntries, entryStr)
 			}
 		}
 		entryCount = len(remainingEntries)
@@ -501,9 +592,9 @@ func DeleteEntry(ctx context.Context, req *mcp.CallToolRequest, input DeleteEntr
 	}
 
 	output := DeleteEntryOutput{
-		DeletedEntry:    deletedEntry,
+		DeletedEntry:     entry,
 		RemainingEntries: remainingEntries,
-		EntryCount:      entryCount,
+		EntryCount:       entryCount,
 	}
 
 	return nil, output, nil
@@ -517,6 +608,7 @@ func main() {
 	}
 
 	apiKey = os.Getenv("LOCALRECALL_API_KEY")
+	defaultCollectionName = os.Getenv("LOCALRECALL_COLLECTION")
 
 	// Create HTTP client with timeout
 	httpClient = &http.Client{
@@ -567,11 +659,20 @@ func main() {
 
 	// Register tools based on enabled list
 	if enabledTools["search"] {
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "search",
-			Description: "Search content in a LocalRecall collection",
-		}, Search)
-		log.Println("Tool 'search' enabled")
+		if defaultCollectionName != "" {
+			desc := fmt.Sprintf("Search content in LocalRecall collection '%s'", defaultCollectionName)
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "search",
+				Description: desc,
+			}, SearchWithoutCollection)
+			log.Printf("Tool 'search' enabled (using default collection: %s)", defaultCollectionName)
+		} else {
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "search",
+				Description: "Search content in a LocalRecall collection",
+			}, Search)
+			log.Println("Tool 'search' enabled")
+		}
 	}
 
 	if enabledTools["create_collection"] {
@@ -591,11 +692,20 @@ func main() {
 	}
 
 	if enabledTools["add_document"] {
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "add_document",
-			Description: "Add a document to a LocalRecall collection",
-		}, AddDocument)
-		log.Println("Tool 'add_document' enabled")
+		if defaultCollectionName != "" {
+			desc := fmt.Sprintf("Add a document to LocalRecall collection '%s'", defaultCollectionName)
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "add_document",
+				Description: desc,
+			}, AddDocumentWithoutCollection)
+			log.Printf("Tool 'add_document' enabled (using default collection: %s)", defaultCollectionName)
+		} else {
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "add_document",
+				Description: "Add a document to a LocalRecall collection",
+			}, AddDocument)
+			log.Println("Tool 'add_document' enabled")
+		}
 	}
 
 	if enabledTools["list_collections"] {
@@ -607,19 +717,37 @@ func main() {
 	}
 
 	if enabledTools["list_files"] {
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "list_files",
-			Description: "List files in a LocalRecall collection",
-		}, ListFiles)
-		log.Println("Tool 'list_files' enabled")
+		if defaultCollectionName != "" {
+			desc := fmt.Sprintf("List files in LocalRecall collection '%s'", defaultCollectionName)
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "list_files",
+				Description: desc,
+			}, ListFilesWithoutCollection)
+			log.Printf("Tool 'list_files' enabled (using default collection: %s)", defaultCollectionName)
+		} else {
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "list_files",
+				Description: "List files in a LocalRecall collection",
+			}, ListFiles)
+			log.Println("Tool 'list_files' enabled")
+		}
 	}
 
 	if enabledTools["delete_entry"] {
-		mcp.AddTool(server, &mcp.Tool{
-			Name:        "delete_entry",
-			Description: "Delete an entry from a LocalRecall collection",
-		}, DeleteEntry)
-		log.Println("Tool 'delete_entry' enabled")
+		if defaultCollectionName != "" {
+			desc := fmt.Sprintf("Delete an entry from LocalRecall collection '%s'", defaultCollectionName)
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "delete_entry",
+				Description: desc,
+			}, DeleteEntryWithoutCollection)
+			log.Printf("Tool 'delete_entry' enabled (using default collection: %s)", defaultCollectionName)
+		} else {
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "delete_entry",
+				Description: "Delete an entry from a LocalRecall collection",
+			}, DeleteEntry)
+			log.Println("Tool 'delete_entry' enabled")
+		}
 	}
 
 	log.Printf("LocalRecall MCP server initialized. URL: %s", localRecallURL)

@@ -535,12 +535,25 @@ A knowledge base management server that provides tools to interact with [LocalRe
 **Configuration:**
 - `LOCALRECALL_URL` - Base URL for LocalRecall API (default: `http://localhost:8080`)
 - `LOCALRECALL_API_KEY` - Optional API key for authentication (sent as `Authorization: Bearer <key>`)
+- `LOCALRECALL_COLLECTION` - Default collection name (if set, tools are registered without `collection_name` parameter - the collection is automatically used from the environment variable)
 - `LOCALRECALL_ENABLED_TOOLS` - Comma-separated list of tools to enable (default: all tools enabled). Valid values: `search`, `create_collection`, `reset_collection`, `add_document`, `list_collections`, `list_files`, `delete_entry`
 
+**Note:** When `LOCALRECALL_COLLECTION` is set, the tools `search`, `add_document`, `list_files`, and `delete_entry` are registered with different input schemas that do not include the `collection_name` parameter. The collection name is automatically taken from the environment variable.
+
 **Search Input Format:**
+
+When `LOCALRECALL_COLLECTION` is **not** set:
 ```json
 {
   "collection_name": "myCollection",
+  "query": "search term",
+  "max_results": 5
+}
+```
+
+When `LOCALRECALL_COLLECTION` is set (e.g., `LOCALRECALL_COLLECTION=myCollection`), the tool schema does not include `collection_name`:
+```json
+{
   "query": "search term",
   "max_results": 5
 }
@@ -562,6 +575,8 @@ A knowledge base management server that provides tools to interact with [LocalRe
 ```
 
 **Add Document Input Format:**
+
+When `LOCALRECALL_COLLECTION` is **not** set:
 ```json
 {
   "collection_name": "myCollection",
@@ -579,10 +594,56 @@ Or with inline content:
 }
 ```
 
+When `LOCALRECALL_COLLECTION` is set, the tool schema does not include `collection_name`:
+```json
+{
+  "file_path": "/path/to/file.txt",
+  "filename": "file.txt"
+}
+```
+
+**List Files Input Format:**
+
+When `LOCALRECALL_COLLECTION` is **not** set:
+```json
+{
+  "collection_name": "myCollection"
+}
+```
+
+When `LOCALRECALL_COLLECTION` is set, the tool schema has no parameters (empty object):
+```json
+{}
+```
+
+**Delete Entry Input Format:**
+
+When `LOCALRECALL_COLLECTION` is **not** set:
+```json
+{
+  "collection_name": "myCollection",
+  "entry": "filename.txt"
+}
+```
+
+When `LOCALRECALL_COLLECTION` is set, the tool schema does not include `collection_name`:
+```json
+{
+  "entry": "filename.txt"
+}
+```
+
 **Docker Image:**
 ```bash
 docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_API_KEY=your-key-here ghcr.io/mudler/mcps/localrecall:latest
 ```
+
+**With default collection (tools will not require `collection_name` parameter):**
+```bash
+docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_COLLECTION=myCollection ghcr.io/mudler/mcps/localrecall:latest
+```
+
+When `LOCALRECALL_COLLECTION` is set, the collection-specific tools (`search`, `add_document`, `list_files`, `delete_entry`) are automatically configured to use that collection, and the `collection_name` parameter is removed from their input schemas.
 
 **Enable specific tools only:**
 ```bash
@@ -600,6 +661,7 @@ mcp:
           "env": {
             "LOCALRECALL_URL": "http://localhost:8080",
             "LOCALRECALL_API_KEY": "your-api-key",
+            "LOCALRECALL_COLLECTION": "myCollection",
             "LOCALRECALL_ENABLED_TOOLS": "search,list_collections,add_document"
           },
           "args": [
