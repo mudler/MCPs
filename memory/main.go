@@ -2,31 +2,27 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/blevesearch/bleve/v2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Memory entry structure
 type MemoryEntry struct {
 	ID        string    `json:"id"`
+	Name      string    `json:"name"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Memory storage structure
-type MemoryStorage struct {
-	Entries []MemoryEntry `json:"entries"`
-}
-
 // Input types for different operations
 type AddMemoryInput struct {
+	Name    string `json:"name" jsonschema:"the name/title of the memory entry"`
 	Content string `json:"content" jsonschema:"the content to store in memory"`
 }
 
@@ -41,12 +37,14 @@ type SearchMemoryInput struct {
 // Output types
 type AddMemoryOutput struct {
 	ID        string    `json:"id" jsonschema:"the ID of the created memory entry"`
+	Name      string    `json:"name" jsonschema:"the name of the memory entry"`
 	Content   string    `json:"content" jsonschema:"the stored content"`
 	CreatedAt time.Time `json:"created_at" jsonschema:"when the entry was created"`
 }
 
 type ListMemoryOutput struct {
-	Entries []MemoryEntry `json:"entries" jsonschema:"list of all memory entries"`
+	Names []string `json:"names" jsonschema:"list of memory entry names"`
+	Count int      `json:"count" jsonschema:"number of entries"`
 }
 
 type RemoveMemoryOutput struct {
@@ -60,46 +58,62 @@ type SearchMemoryOutput struct {
 	Count   int           `json:"count" jsonschema:"number of matching entries found"`
 }
 
-// Global variable to store the memory file path
-var memoryFilePath string
-
-// Load memory entries from JSON file
-func loadMemory() (*MemoryStorage, error) {
-	if _, err := os.Stat(memoryFilePath); os.IsNotExist(err) {
-		// File doesn't exist, return empty storage
-		return &MemoryStorage{Entries: []MemoryEntry{}}, nil
-	}
-
-	data, err := os.ReadFile(memoryFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read memory file: %w", err)
-	}
-
-	var storage MemoryStorage
-	if err := json.Unmarshal(data, &storage); err != nil {
-		return nil, fmt.Errorf("failed to parse memory file: %w", err)
-	}
-
-	return &storage, nil
-}
-
-// Save memory entries to JSON file
-func saveMemory(storage *MemoryStorage) error {
-	data, err := json.MarshalIndent(storage, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal memory data: %w", err)
-	}
-
-	if err := os.WriteFile(memoryFilePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write memory file: %w", err)
-	}
-
-	return nil
-}
+// Global variable to store the bleve index
+var index bleve.Index
+var indexPath string
 
 // Generate a unique ID for memory entries
 func generateID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// Initialize bleve index
+func initBleveIndex() error {
+	// Check if index already exists
+	if _, err := os.Stat(indexPath); err == nil {
+		// Index exists, open it
+		var err error
+		index, err = bleve.Open(indexPath)
+		if err != nil {
+			return fmt.Errorf("failed to open bleve index: %w", err)
+		}
+		return nil
+	}
+
+	// Create new index mapping
+	mapping := bleve.NewIndexMapping()
+
+	// Create document mapping for memory entries
+	entryMapping := bleve.NewDocumentMapping()
+
+	// Map name field as text (searchable and stored)
+	nameFieldMapping := bleve.NewTextFieldMapping()
+	nameFieldMapping.Analyzer = "standard"
+	nameFieldMapping.Store = true
+	entryMapping.AddFieldMappingsAt("name", nameFieldMapping)
+
+	// Map content field as text (searchable and stored)
+	contentFieldMapping := bleve.NewTextFieldMapping()
+	contentFieldMapping.Analyzer = "standard"
+	contentFieldMapping.Store = true
+	entryMapping.AddFieldMappingsAt("content", contentFieldMapping)
+
+	// Map created_at field as datetime (stored but not indexed for search)
+	dateFieldMapping := bleve.NewDateTimeFieldMapping()
+	dateFieldMapping.Store = true
+	entryMapping.AddFieldMappingsAt("created_at", dateFieldMapping)
+
+	// Add document mapping to index mapping
+	mapping.AddDocumentMapping("_default", entryMapping)
+
+	// Create the index
+	var err error
+	index, err = bleve.New(indexPath, mapping)
+	if err != nil {
+		return fmt.Errorf("failed to create bleve index: %w", err)
+	}
+
+	return nil
 }
 
 // Add memory entry
@@ -108,25 +122,21 @@ func AddMemory(ctx context.Context, req *mcp.CallToolRequest, input AddMemoryInp
 	AddMemoryOutput,
 	error,
 ) {
-	storage, err := loadMemory()
-	if err != nil {
-		return nil, AddMemoryOutput{}, err
-	}
-
 	entry := MemoryEntry{
 		ID:        generateID(),
+		Name:      input.Name,
 		Content:   input.Content,
 		CreatedAt: time.Now(),
 	}
 
-	storage.Entries = append(storage.Entries, entry)
-
-	if err := saveMemory(storage); err != nil {
-		return nil, AddMemoryOutput{}, err
+	// Index the entry in bleve
+	if err := index.Index(entry.ID, entry); err != nil {
+		return nil, AddMemoryOutput{}, fmt.Errorf("failed to index memory entry: %w", err)
 	}
 
 	output := AddMemoryOutput{
 		ID:        entry.ID,
+		Name:      entry.Name,
 		Content:   entry.Content,
 		CreatedAt: entry.CreatedAt,
 	}
@@ -134,19 +144,34 @@ func AddMemory(ctx context.Context, req *mcp.CallToolRequest, input AddMemoryInp
 	return nil, output, nil
 }
 
-// List all memory entries
+// List all memory entries (returns only names)
 func ListMemory(ctx context.Context, req *mcp.CallToolRequest, input struct{}) (
 	*mcp.CallToolResult,
 	ListMemoryOutput,
 	error,
 ) {
-	storage, err := loadMemory()
+	// Create a match all query to get all documents
+	query := bleve.NewMatchAllQuery()
+	searchRequest := bleve.NewSearchRequest(query)
+	searchRequest.Size = 10000              // Get up to 10000 entries
+	searchRequest.Fields = []string{"name"} // Only fetch the name field
+
+	searchResult, err := index.Search(searchRequest)
 	if err != nil {
-		return nil, ListMemoryOutput{}, err
+		return nil, ListMemoryOutput{}, fmt.Errorf("failed to search index: %w", err)
+	}
+
+	names := make([]string, 0, len(searchResult.Hits))
+	for _, hit := range searchResult.Hits {
+		// Extract name from stored fields
+		if nameVal, ok := hit.Fields["name"].(string); ok {
+			names = append(names, nameVal)
+		}
 	}
 
 	output := ListMemoryOutput{
-		Entries: storage.Entries,
+		Names: names,
+		Count: len(names),
 	}
 
 	return nil, output, nil
@@ -158,22 +183,13 @@ func RemoveMemory(ctx context.Context, req *mcp.CallToolRequest, input RemoveMem
 	RemoveMemoryOutput,
 	error,
 ) {
-	storage, err := loadMemory()
+	// Check if document exists by trying to get it
+	doc, err := index.Document(input.ID)
 	if err != nil {
-		return nil, RemoveMemoryOutput{}, err
+		return nil, RemoveMemoryOutput{}, fmt.Errorf("failed to check document existence: %w", err)
 	}
 
-	// Find and remove the entry
-	found := false
-	for i, entry := range storage.Entries {
-		if entry.ID == input.ID {
-			storage.Entries = append(storage.Entries[:i], storage.Entries[i+1:]...)
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if doc == nil {
 		output := RemoveMemoryOutput{
 			Success: false,
 			Message: fmt.Sprintf("Memory entry with ID '%s' not found", input.ID),
@@ -181,8 +197,9 @@ func RemoveMemory(ctx context.Context, req *mcp.CallToolRequest, input RemoveMem
 		return nil, output, nil
 	}
 
-	if err := saveMemory(storage); err != nil {
-		return nil, RemoveMemoryOutput{}, err
+	// Delete the document from the index
+	if err := index.Delete(input.ID); err != nil {
+		return nil, RemoveMemoryOutput{}, fmt.Errorf("failed to delete memory entry: %w", err)
 	}
 
 	output := RemoveMemoryOutput{
@@ -193,25 +210,63 @@ func RemoveMemory(ctx context.Context, req *mcp.CallToolRequest, input RemoveMem
 	return nil, output, nil
 }
 
-// Search memory entries by content
+// Search memory entries by name and content
 func SearchMemory(ctx context.Context, req *mcp.CallToolRequest, input SearchMemoryInput) (
 	*mcp.CallToolResult,
 	SearchMemoryOutput,
 	error,
 ) {
-	storage, err := loadMemory()
+	// Use disjunction query to search both name and content fields
+	// This is more flexible and handles multi-word queries better
+	nameQuery := bleve.NewMatchQuery(input.Query)
+	nameQuery.SetField("name")
+	contentQuery := bleve.NewMatchQuery(input.Query)
+	contentQuery.SetField("content")
+	disjunctionQuery := bleve.NewDisjunctionQuery(nameQuery, contentQuery)
+
+	searchRequest := bleve.NewSearchRequest(disjunctionQuery)
+	searchRequest.Size = 100                                         // Limit results to 100
+	searchRequest.Fields = []string{"name", "content", "created_at"} // Request stored fields
+
+	searchResult, err := index.Search(searchRequest)
 	if err != nil {
-		return nil, SearchMemoryOutput{}, err
+		return nil, SearchMemoryOutput{}, fmt.Errorf("failed to search index: %w", err)
 	}
 
-	// Perform case-insensitive search
-	query := strings.ToLower(input.Query)
-	var results []MemoryEntry
-
-	for _, entry := range storage.Entries {
-		if strings.Contains(strings.ToLower(entry.Content), query) {
-			results = append(results, entry)
+	results := make([]MemoryEntry, 0, len(searchResult.Hits))
+	for _, hit := range searchResult.Hits {
+		entry := MemoryEntry{
+			ID: hit.ID,
 		}
+
+		// Try to extract fields from stored fields in search result first
+		if nameVal, ok := hit.Fields["name"].(string); ok {
+			entry.Name = nameVal
+		}
+		if contentVal, ok := hit.Fields["content"].(string); ok {
+			entry.Content = contentVal
+		}
+		if createdAtVal, ok := hit.Fields["created_at"].(string); ok {
+			if t, err := time.Parse(time.RFC3339, createdAtVal); err == nil {
+				entry.CreatedAt = t
+			}
+		} else if createdAtVal, ok := hit.Fields["created_at"].(time.Time); ok {
+			entry.CreatedAt = createdAtVal
+		}
+
+		// If fields are missing, try to fetch document and reconstruct from stored data
+		// Note: This is a fallback - stored fields should work with Store = true
+		if entry.Name == "" || entry.Content == "" {
+			doc, err := index.Document(hit.ID)
+			if err == nil && doc != nil {
+				// Iterate through document to find stored field values
+				// Bleve stores fields, but we need to access them via the document API
+				// For now, log a warning and skip if fields aren't in stored fields
+				log.Printf("Warning: Missing stored fields for document %s, stored fields should be used", hit.ID)
+			}
+		}
+
+		results = append(results, entry)
 	}
 
 	output := SearchMemoryOutput{
@@ -224,16 +279,22 @@ func SearchMemory(ctx context.Context, req *mcp.CallToolRequest, input SearchMem
 }
 
 func main() {
-	// Get memory file path from environment variable, default to ./memory.json
-	memoryFilePath = os.Getenv("MEMORY_FILE_PATH")
-	if memoryFilePath == "" {
-		memoryFilePath = "/data/memory.json"
+	// Get index path from environment variable, default to /data/memory.bleve
+	indexPath = os.Getenv("MEMORY_INDEX_PATH")
+	if indexPath == "" {
+		indexPath = "/data/memory.bleve"
 	}
 
-	os.MkdirAll(filepath.Dir(memoryFilePath), 0755)
+	// Create directory if it doesn't exist
+	os.MkdirAll(filepath.Dir(indexPath), 0755)
+
+	// Initialize bleve index
+	if err := initBleveIndex(); err != nil {
+		log.Fatalf("Failed to initialize bleve index: %v", err)
+	}
 
 	// Create a server with memory tools
-	server := mcp.NewServer(&mcp.Implementation{Name: "memory", Version: "v1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "memory", Version: "v2.0.0"}, nil)
 
 	// Register memory tools
 	mcp.AddTool(server, &mcp.Tool{
@@ -243,7 +304,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_memory",
-		Description: "List all memory entries",
+		Description: "List all memory entry names",
 	}, ListMemory)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -253,7 +314,7 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_memory",
-		Description: "Search memory entries by content",
+		Description: "Search memory entries by name and content using full-text search",
 	}, SearchMemory)
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
