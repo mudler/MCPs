@@ -103,31 +103,54 @@ mcp:
 
 ### 🧠 Memory Server
 
-A persistent memory storage server that allows AI models to store, retrieve, and manage information across sessions.
+A persistent memory storage server that allows AI models to store, retrieve, and manage information across sessions using disk-based full-text search.
 
 **Features:**
-- Persistent JSON file storage
+- Disk-based bleve index storage (no full memory load)
+- Efficient full-text search across name and content fields
 - Add, list, and remove memory entries
 - Unique ID generation for each entry
 - Timestamp tracking for entries
 - Configurable storage location
 - JSON schema validation for inputs/outputs
+- Scalable to large numbers of entries
 
 **Tools:**
-- `add_memory` - Add a new entry to memory storage
-- `list_memory` - List all memory entries
+- `add_memory` - Add a new entry to memory storage (requires both name and content)
+- `list_memory` - List all memory entry names (returns only names, not full entries)
 - `remove_memory` - Remove a memory entry by ID
-- `search_memory` - Search memory entries by content (case-insensitive)
+- `search_memory` - Search memory entries by name and content using full-text search
 
 **Configuration:**
-- `MEMORY_FILE_PATH` - Environment variable to set the memory file path (default: `/data/memory.json`)
+- `MEMORY_INDEX_PATH` - Environment variable to set the bleve index path (default: `/data/memory.bleve`)
+
+**Add Memory Input Format:**
+```json
+{
+  "name": "User Preferences",
+  "content": "User prefers coffee over tea"
+}
+```
 
 **Memory Entry Format:**
 ```json
 {
   "id": "1703123456789000000",
+  "name": "User Preferences",
   "content": "User prefers coffee over tea",
   "created_at": "2023-12-21T10:30:56.789Z"
+}
+```
+
+**List Memory Output Format:**
+```json
+{
+  "names": [
+    "User Preferences",
+    "Meeting Notes",
+    "Project Ideas"
+  ],
+  "count": 3
 }
 ```
 
@@ -138,6 +161,7 @@ A persistent memory storage server that allows AI models to store, retrieve, and
   "results": [
     {
       "id": "1703123456789000000",
+      "name": "User Preferences",
       "content": "User prefers coffee over tea",
       "created_at": "2023-12-21T10:30:56.789Z"
     }
@@ -148,7 +172,7 @@ A persistent memory storage server that allows AI models to store, retrieve, and
 
 **Docker Image:**
 ```bash
-docker run -e MEMORY_FILE_PATH=/custom/path/memory.json ghcr.io/mudler/mcps/memory:latest
+docker run -e MEMORY_INDEX_PATH=/custom/path/memory.bleve ghcr.io/mudler/mcps/memory:latest
 ```
 
 **LocalAI configuration ( to add to the model config):**
@@ -160,7 +184,7 @@ mcp:
         "memory": {
           "command": "docker",
           "env": {
-            "MEMORY_FILE_PATH": "/data/memory.json"
+            "MEMORY_INDEX_PATH": "/data/memory.bleve"
           },
           "args": [
             "run", "-i", "--rm", "-v", "/host/data:/data",
