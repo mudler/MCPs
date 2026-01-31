@@ -25,6 +25,14 @@ const (
 	unansweredWindow = 24 * time.Hour
 )
 
+func init() {
+	// Disable log output by default so it doesn't break MCP stdio (stdout is used for JSON-RPC).
+	// Set TWITTER_DEBUG=1 or MCP_TWITTER_DEBUG=1 to enable logging for debugging.
+	if os.Getenv("TWITTER_DEBUG") == "" && os.Getenv("MCP_TWITTER_DEBUG") == "" {
+		log.SetOutput(io.Discard)
+	}
+}
+
 var (
 	client      *twitter.Client
 	authUserID  string
@@ -845,7 +853,8 @@ func InitClientFromEnv() bool {
 
 func main() {
 	if !InitClientFromEnv() {
-		log.Fatal("Set TWITTER_BEARER_TOKEN or all of TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET")
+		fmt.Fprintln(os.Stderr, "twitter MCP: Set TWITTER_BEARER_TOKEN or all of TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET")
+		os.Exit(1)
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "twitter", Version: "v1.0.0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_tweets", Description: "Fetch recent tweets from a user (with media support)"}, GetTweets)
@@ -863,6 +872,7 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{Name: "follow_user", Description: "Follow or unfollow a user"}, FollowUser)
 	mcp.AddTool(server, &mcp.Tool{Name: "upload_media", Description: "Upload an image (JPEG/PNG/GIF) and get media_id for post_tweet"}, UploadMedia)
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, "twitter MCP:", err)
+		os.Exit(1)
 	}
 }
