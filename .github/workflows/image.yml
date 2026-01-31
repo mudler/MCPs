@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mcp: [duckduckgo, weather, memory, homeassistant, scripts, localrecall]
+        mcp: [duckduckgo, weather, memory, homeassistant, scripts, localrecall, twitter]
     permissions:
       packages: write
       contents: read

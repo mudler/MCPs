@@ -283,6 +283,74 @@ mcp:
     }
 ```
 
+### 𝕏 Twitter Server
+
+An MCP server for interacting with Twitter/X: read tweets and profiles, search, timelines, trends, and perform actions (like, retweet, post, thread, follow) with optional media upload.
+
+**Features:**
+- Get tweets from users (with media), user profiles, search by keyword/hashtag (latest/top), rate-limited (max 50 tweets per request)
+- Like/unlike, retweet/undo retweet, post tweets (text, media, reply, quote), create threads
+- Home/user/mentions timelines, list tweets, trending topics (WOEID), followers/following, follow/unfollow
+- Get unanswered mentions (tweets that mention you and you have not replied to, last 24 hours)
+- Image upload (JPEG/PNG/GIF) for use in post_tweet/create_thread
+
+**Tools:**
+- `get_tweets` - Fetch recent tweets from a user (with media)
+- `get_profile` - Get a user's profile information
+- `search_tweets` - Search for tweets by hashtag or keyword
+- `like_tweet` - Like or unlike a tweet
+- `retweet` - Retweet or undo retweet
+- `post_tweet` - Post a new tweet with optional media, reply, or quote
+- `create_thread` - Create a Twitter thread
+- `get_timeline` - Get tweets from home, user, or mentions timeline
+- `get_unanswered_mentions` - Get tweets that mention you and you have not replied to (last 24 hours)
+- `get_list_tweets` - Get tweets from a Twitter list
+- `get_trends` - Get current trending topics by place (WOEID)
+- `get_user_relationships` - Get followers or following list
+- `follow_user` - Follow or unfollow a user
+- `upload_media` - Upload an image and get media_id for post_tweet
+
+**Configuration:**
+- `TWITTER_BEARER_TOKEN` - App-only (read-only where allowed); or use OAuth 1.0a for full access
+- OAuth 1.0a (required for write, home timeline, trends, media upload): `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`
+- Optional: `TWITTER_MAX_TWEETS` (default 50) to cap tweets per request
+
+**Acceptance tests:** Run with env credentials set and `TWITTER_ACCEPTANCE=true`:
+```bash
+TWITTER_ACCEPTANCE=true TWITTER_BEARER_TOKEN=xxx go test ./twitter/...
+# Or with OAuth 1.0a for full tests:
+TWITTER_ACCEPTANCE=true TWITTER_API_KEY=... TWITTER_API_SECRET=... TWITTER_ACCESS_TOKEN=... TWITTER_ACCESS_SECRET=... go test ./twitter/...
+```
+
+**Docker Image:**
+```bash
+docker run -e TWITTER_BEARER_TOKEN=xxx ghcr.io/mudler/mcps/twitter:latest
+# Or OAuth 1.0a:
+docker run -e TWITTER_API_KEY=... -e TWITTER_API_SECRET=... -e TWITTER_ACCESS_TOKEN=... -e TWITTER_ACCESS_SECRET=... ghcr.io/mudler/mcps/twitter:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "twitter": {
+          "command": "docker",
+          "env": {
+            "TWITTER_BEARER_TOKEN": "your-bearer-token"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/twitter:master"
+          ]
+        }
+      }
+    }
+```
+
+**Note:** Twitter API access level (Free/Basic/Pro) affects rate limits and some endpoints (e.g. search). Trends and media upload use v1.1 API and require OAuth 1.0a.
+
 ### 🐚 Shell Server
 
 A shell script execution server that allows AI models to execute shell scripts and commands.
