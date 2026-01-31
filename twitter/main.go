@@ -25,20 +25,35 @@ const (
 	unansweredWindow = 24 * time.Hour
 )
 
+var debugLogging bool
+
 func init() {
 	// Disable log output by default so it doesn't break MCP stdio (stdout is used for JSON-RPC).
 	// Set TWITTER_DEBUG=1 or MCP_TWITTER_DEBUG=1 to enable logging for debugging.
-	if os.Getenv("TWITTER_DEBUG") == "" && os.Getenv("MCP_TWITTER_DEBUG") == "" {
+	debugLogging = os.Getenv("TWITTER_DEBUG") != "" || os.Getenv("MCP_TWITTER_DEBUG") != ""
+	if !debugLogging {
 		log.SetOutput(io.Discard)
 	}
 }
 
+func debugLog(v ...interface{}) {
+	if debugLogging {
+		log.Println(v...)
+	}
+}
+
+func debugLogf(format string, v ...interface{}) {
+	if debugLogging {
+		log.Printf(format, v...)
+	}
+}
+
 var (
-	client      *twitter.Client
-	authUserID  string
-	maxTweets   int
-	hasUserCtx  bool
-	v1Client    *http.Client
+	client     *twitter.Client
+	authUserID string
+	maxTweets  int
+	hasUserCtx bool
+	v1Client   *http.Client
 )
 
 // bearerAuthorizer adds Bearer token to requests
@@ -111,9 +126,9 @@ type GetTrendsInput struct {
 }
 
 type GetUserRelationshipsInput struct {
-	UserID   string `json:"user_id" jsonschema:"user ID"`
-	Type     string `json:"type" jsonschema:"followers or following"`
-	MaxResults int  `json:"max_results,omitempty" jsonschema:"max users (default 50, cap 100)"`
+	UserID     string `json:"user_id" jsonschema:"user ID"`
+	Type       string `json:"type" jsonschema:"followers or following"`
+	MaxResults int    `json:"max_results,omitempty" jsonschema:"max users (default 50, cap 100)"`
 }
 
 type FollowUserInput struct {
@@ -128,12 +143,12 @@ type UploadMediaInput struct {
 
 // Simplified output types (JSON-friendly)
 type TweetOut struct {
-	ID        string            `json:"id"`
-	Text      string            `json:"text"`
-	AuthorID  string            `json:"author_id,omitempty"`
-	CreatedAt string            `json:"created_at,omitempty"`
-	Metrics   map[string]int    `json:"public_metrics,omitempty"`
-	MediaURLs []string          `json:"media_urls,omitempty"`
+	ID        string         `json:"id"`
+	Text      string         `json:"text"`
+	AuthorID  string         `json:"author_id,omitempty"`
+	CreatedAt string         `json:"created_at,omitempty"`
+	Metrics   map[string]int `json:"public_metrics,omitempty"`
+	MediaURLs []string       `json:"media_urls,omitempty"`
 }
 
 type UserOut struct {
@@ -170,9 +185,9 @@ type GetListTweetsOutput struct {
 }
 
 type TrendOut struct {
-	Name       string `json:"name"`
-	Query      string `json:"query"`
-	TweetVolume int   `json:"tweet_volume,omitempty"`
+	Name        string `json:"name"`
+	Query       string `json:"query"`
+	TweetVolume int    `json:"tweet_volume,omitempty"`
 }
 
 type GetTrendsOutput struct {
@@ -223,10 +238,10 @@ func tweetFromObj(t *twitter.TweetObj, includes *twitter.TweetRawIncludes) Tweet
 	}
 	if t.PublicMetrics != nil {
 		out.Metrics = map[string]int{
-			"like_count":     t.PublicMetrics.Likes,
-			"reply_count":    t.PublicMetrics.Replies,
-			"retweet_count":  t.PublicMetrics.Retweets,
-			"quote_count":    t.PublicMetrics.Quotes,
+			"like_count":       t.PublicMetrics.Likes,
+			"reply_count":      t.PublicMetrics.Replies,
+			"retweet_count":    t.PublicMetrics.Retweets,
+			"quote_count":      t.PublicMetrics.Quotes,
 			"impression_count": t.PublicMetrics.Impressions,
 		}
 	}
@@ -245,11 +260,11 @@ func userFromObj(u *twitter.UserObj) UserOut {
 		return UserOut{}
 	}
 	out := UserOut{
-		ID:               u.ID,
-		Name:             u.Name,
-		Username:         u.UserName,
-		Description:      u.Description,
-		ProfileImageURL:  u.ProfileImageURL,
+		ID:              u.ID,
+		Name:            u.Name,
+		Username:        u.UserName,
+		Description:     u.Description,
+		ProfileImageURL: u.ProfileImageURL,
 	}
 	if u.PublicMetrics != nil {
 		out.PublicMetrics = map[string]int{
@@ -832,11 +847,11 @@ func InitClientFromEnv() bool {
 		ctx := context.Background()
 		resp, err := client.AuthUserLookup(ctx, twitter.UserLookupOpts{})
 		if err != nil {
-			log.Printf("Warning: could not resolve auth user: %v", err)
+			debugLogf("Warning: could not resolve auth user: %v", err)
 		} else if resp.Raw != nil && len(resp.Raw.Users) > 0 {
 			authUserID = resp.Raw.Users[0].ID
 		}
-		log.Println("Twitter MCP: using OAuth 1.0a user context")
+		debugLog("Twitter MCP: using OAuth 1.0a user context")
 		return true
 	}
 	if bearer != "" {
@@ -845,7 +860,7 @@ func InitClientFromEnv() bool {
 			Client:     http.DefaultClient,
 			Host:       "https://api.twitter.com",
 		}
-		log.Println("Twitter MCP: using Bearer (app-only); write and home/mentions tools will fail without user context")
+		debugLog("Twitter MCP: using Bearer (app-only); write and home/mentions tools will fail without user context")
 		return true
 	}
 	return false
@@ -856,6 +871,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "twitter MCP: Set TWITTER_BEARER_TOKEN or all of TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET")
 		os.Exit(1)
 	}
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "twitter", Version: "v1.0.0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_tweets", Description: "Fetch recent tweets from a user (with media support)"}, GetTweets)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_profile", Description: "Get a user's profile information"}, GetProfile)
