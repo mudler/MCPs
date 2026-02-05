@@ -45,9 +45,16 @@ type Entity struct {
 	Domain       string      `json:"domain" jsonschema:"domain of the entity"`
 }
 
+// EntitySummary is a compact view for listing; use search_entities for full details.
+type EntitySummary struct {
+	EntityID     string      `json:"entity_id" jsonschema:"the entity ID"`
+	Domain       string      `json:"domain" jsonschema:"domain of the entity"`
+	FriendlyName interface{} `json:"friendly_name" jsonschema:"friendly name if available"`
+}
+
 type ListEntitiesOutput struct {
-	Entities []Entity `json:"entities" jsonschema:"list of all entities"`
-	Count    int      `json:"count" jsonschema:"number of entities"`
+	Entities []EntitySummary `json:"entities" jsonschema:"compact list of entity IDs and domains; use search_entities to get full details"`
+	Count    int             `json:"count" jsonschema:"number of entities"`
 }
 
 type ServiceField struct {
@@ -62,9 +69,15 @@ type Service struct {
 	Fields map[string]ServiceField `json:"fields" jsonschema:"service fields"`
 }
 
+// ServiceSummary is a compact view for listing; use search_services for full details.
+type ServiceSummary struct {
+	Domain string `json:"domain" jsonschema:"service domain"`
+	Name   string `json:"name" jsonschema:"service name"`
+}
+
 type GetServicesOutput struct {
-	Services []Service `json:"services" jsonschema:"list of all available services"`
-	Count    int       `json:"count" jsonschema:"number of services"`
+	Services []ServiceSummary `json:"services" jsonschema:"compact list of service domain and name; use search_services to get full details including fields"`
+	Count    int              `json:"count" jsonschema:"number of services"`
 }
 
 type CallServiceOutput struct {
@@ -93,25 +106,18 @@ func ListEntities(ctx context.Context, req *mcp.CallToolRequest, input ListEntit
 		return nil, ListEntitiesOutput{}, fmt.Errorf("failed to get states: %w", err)
 	}
 
-	var entities []Entity
+	entities := []EntitySummary{}
 	for _, state := range states {
-		// Extract domain from entity ID
 		data := strings.Split(state.EntityId, ".")
 		domain := ""
 		if len(data) > 0 {
 			domain = data[0]
 		}
-
-		// Extract friendly name if available
-		friendlyName := state.Attributes["friendly_name"]
-
-		entity := Entity{
+		entities = append(entities, EntitySummary{
 			EntityID:     state.EntityId,
-			State:        state.State,
-			FriendlyName: friendlyName,
 			Domain:       domain,
-		}
-		entities = append(entities, entity)
+			FriendlyName: state.Attributes["friendly_name"],
+		})
 	}
 
 	output := ListEntitiesOutput{
@@ -133,40 +139,13 @@ func GetServices(ctx context.Context, req *mcp.CallToolRequest, input GetService
 		return nil, GetServicesOutput{}, fmt.Errorf("failed to get services: %w", err)
 	}
 
-	var result []Service
+	result := []ServiceSummary{}
 	for _, s := range services {
-		for serviceName, serviceInfo := range s.Services {
-			// Convert service fields to our format
-			fields := make(map[string]ServiceField)
-			for fieldName, fieldInfo := range serviceInfo.Fields {
-				field := ServiceField{
-					Description: fieldInfo.Description,
-				}
-
-				// Set example if available (convert to string if needed)
-				if fieldInfo.Example != nil {
-					switch v := fieldInfo.Example.(type) {
-					case string:
-						field.Example = v
-					default:
-						field.Example = fmt.Sprintf("%v", v)
-					}
-				}
-
-				// Set required flag if available
-				if fieldInfo.Selector != nil {
-					field.Required = true // Set based on selector if needed
-				}
-
-				fields[fieldName] = field
-			}
-
-			service := Service{
+		for serviceName := range s.Services {
+			result = append(result, ServiceSummary{
 				Domain: s.Domain,
 				Name:   serviceName,
-				Fields: fields,
-			}
-			result = append(result, service)
+			})
 		}
 	}
 
@@ -220,7 +199,7 @@ func SearchEntities(ctx context.Context, req *mcp.CallToolRequest, input SearchE
 	}
 
 	keyword := strings.ToLower(input.Keyword)
-	var matchingEntities []Entity
+	matchingEntities := []Entity{}
 
 	for _, state := range states {
 		// Extract domain from entity ID
@@ -278,7 +257,7 @@ func SearchServices(ctx context.Context, req *mcp.CallToolRequest, input SearchS
 	}
 
 	keyword := strings.ToLower(input.Keyword)
-	var result []Service
+	result := []Service{}
 
 	for _, s := range services {
 		// Check if keyword matches in domain
@@ -369,12 +348,12 @@ func main() {
 	// Register tools
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_entities",
-		Description: "List all entities in Home Assistant and their current states",
+		Description: "List all entities in Home Assistant (compact: entity_id and domain only). Use search_entities with a keyword to get full details (state, friendly_name).",
 	}, ListEntities)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_services",
-		Description: "Get all available services in Home Assistant",
+		Description: "Get all available services in Home Assistant (compact: domain and name only). Use search_services with a keyword to get full details including fields.",
 	}, GetServices)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -384,12 +363,12 @@ func main() {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_entities",
-		Description: "Search for entities in Home Assistant by keyword (searches across entity ID, domain, state, and friendly name)",
+		Description: "Search for entities in Home Assistant by keyword (searches entity ID, domain, state, friendly name). Returns full details: entity_id, state, friendly_name, domain.",
 	}, SearchEntities)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "search_services",
-		Description: "Search for services in Home Assistant by keyword (searches across service domain and name)",
+		Description: "Search for services in Home Assistant by keyword (searches domain and name). Returns full details including service fields.",
 	}, SearchServices)
 
 	// Run the server
