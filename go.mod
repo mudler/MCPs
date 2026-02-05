@@ -6,6 +6,7 @@ require (
 	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/dghubble/oauth1 v0.7.3
 	github.com/g8rswimmer/go-twitter/v2 v2.1.5
+	github.com/gofrs/flock v0.13.0
 	github.com/mkelcik/go-ha-client v1.0.0
 	github.com/modelcontextprotocol/go-sdk v1.0.0
 	github.com/onsi/ginkgo/v2 v2.28.1

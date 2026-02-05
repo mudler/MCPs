@@ -765,6 +765,211 @@ mcp:
     }
 ```
 
+### ✅ TODO Server
+
+A shared TODO list management server that allows multiple agents to coordinate tasks with states and assignees. Perfect for agent team coordination.
+
+**Features:**
+- Shared TODO list accessible by multiple agents/processes
+- File-based persistence with atomic writes
+- File locking for concurrent access safety
+- Task states: pending, in_progress, done
+- Assignee tracking for task ownership
+- Full CRUD operations (add, update, remove, list)
+- Status summary with counts by state and assignee
+
+**Tools:**
+- `add_todo` - Add a new TODO item to the shared list
+- `update_todo_status` - Update the status of a TODO item (pending, in_progress, or done)
+- `update_todo_assignee` - Update the assignee of a TODO item
+- `remove_todo` - Remove a TODO item by ID
+- `list_todos` - List all TODO items
+- `get_todo_status` - Get a summary of the TODO list with counts by status and assignee
+
+**Configuration:**
+- `TODO_FILE_PATH` - Environment variable to set the TODO file path (default: `/data/todos.json`)
+
+**TODO Item Format:**
+```json
+{
+  "id": "1703123456789000000",
+  "title": "Implement feature X",
+  "status": "in_progress",
+  "assignee": "agent1"
+}
+```
+
+**Add TODO Input Format:**
+```json
+{
+  "title": "Implement feature X",
+  "assignee": "agent1"
+}
+```
+
+**Update Status Input Format:**
+```json
+{
+  "id": "1703123456789000000",
+  "status": "done"
+}
+```
+
+**List TODOs Output Format:**
+```json
+{
+  "items": [
+    {
+      "id": "1703123456789000000",
+      "title": "Implement feature X",
+      "status": "in_progress",
+      "assignee": "agent1"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Status Summary Output Format:**
+```json
+{
+  "total": 10,
+  "pending": 3,
+  "in_progress": 5,
+  "done": 2,
+  "by_assignee": {
+    "agent1": 4,
+    "agent2": 6
+  }
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e TODO_FILE_PATH=/custom/path/todos.json -v /host/data:/data ghcr.io/mudler/mcps/todo:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "todo": {
+          "command": "docker",
+          "env": {
+            "TODO_FILE_PATH": "/data/todos.json"
+          },
+          "args": [
+            "run", "-i", "--rm", "-v", "/host/data:/data",
+            "ghcr.io/mudler/mcps/todo:master"
+          ]
+        }
+      }
+    }
+```
+
+### 📬 Mailbox Server
+
+A shared mailbox server that enables message exchange between different agents in a team. Each agent instance reads only its own messages while being able to send messages to any agent.
+
+**Features:**
+- Shared mailbox accessible by multiple agents/processes
+- File-based persistence with atomic writes
+- File locking for concurrent access safety
+- Agent-specific message filtering
+- Read/unread status tracking
+- Message deletion (only by recipient)
+- Timestamp tracking for all messages
+
+**Tools:**
+- `send_message` - Send a message to a recipient agent
+- `read_messages` - Read all messages for this agent
+- `mark_message_read` - Mark a message as read by ID
+- `mark_message_unread` - Mark a message as unread by ID
+- `delete_message` - Delete a message by ID (only if recipient matches this agent)
+
+**Configuration:**
+- `MAILBOX_FILE_PATH` - Environment variable to set the mailbox file path (default: `/data/mailbox.json`)
+- `MAILBOX_AGENT_NAME` - Environment variable for this agent's name (required)
+
+**Message Format:**
+```json
+{
+  "id": "1703123456789000000",
+  "sender": "agent1",
+  "recipient": "agent2",
+  "content": "Please review the changes",
+  "timestamp": "2023-12-21T10:30:56.789Z",
+  "read": false
+}
+```
+
+**Send Message Input Format:**
+```json
+{
+  "recipient": "agent2",
+  "content": "Please review the changes"
+}
+```
+
+**Send Message Output Format:**
+```json
+{
+  "id": "1703123456789000000",
+  "sender": "agent1",
+  "recipient": "agent2",
+  "content": "Please review the changes",
+  "timestamp": "2023-12-21T10:30:56.789Z"
+}
+```
+
+**Read Messages Output Format:**
+```json
+{
+  "messages": [
+    {
+      "id": "1703123456789000000",
+      "sender": "agent1",
+      "recipient": "agent2",
+      "content": "Please review the changes",
+      "timestamp": "2023-12-21T10:30:56.789Z",
+      "read": false
+    }
+  ],
+  "count": 1,
+  "unread": 1
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e MAILBOX_FILE_PATH=/custom/path/mailbox.json -e MAILBOX_AGENT_NAME=agent1 -v /host/data:/data ghcr.io/mudler/mcps/mailbox:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "mailbox": {
+          "command": "docker",
+          "env": {
+            "MAILBOX_FILE_PATH": "/data/mailbox.json",
+            "MAILBOX_AGENT_NAME": "agent1"
+          },
+          "args": [
+            "run", "-i", "--rm", "-v", "/host/data:/data",
+            "ghcr.io/mudler/mcps/mailbox:master"
+          ]
+        }
+      }
+    }
+```
+
+**Note:** Each agent instance must have a unique `MAILBOX_AGENT_NAME` to properly filter and manage its own messages. The mailbox file is shared across all agents, but each agent only sees messages where it is the recipient.
+
 ## Development
 
 ### Prerequisites
@@ -792,6 +997,8 @@ make MCP_SERVER=shell build
 make MCP_SERVER=ssh build
 make MCP_SERVER=scripts build
 make MCP_SERVER=localrecall build
+make MCP_SERVER=todo build
+make MCP_SERVER=mailbox build
 
 # Run tests and checks
 make ci-local
@@ -865,6 +1072,12 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/localrecall:latest` - Latest LocalRecall server
 - `ghcr.io/mudler/mcps/localrecall:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/localrecall:master` - Development versions
+- `ghcr.io/mudler/mcps/todo:latest` - Latest TODO server
+- `ghcr.io/mudler/mcps/todo:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/todo:master` - Development versions
+- `ghcr.io/mudler/mcps/mailbox:latest` - Latest Mailbox server
+- `ghcr.io/mudler/mcps/mailbox:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/mailbox:master` - Development versions
 
 ## Contributing
 
