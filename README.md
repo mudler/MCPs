@@ -101,6 +101,55 @@ mcp:
     }
 ```
 
+### ⏱️ Wait Server
+
+A simple wait/sleep server that allows AI models to autonomously wait for a specified duration. Useful for waiting for asynchronous operations to complete.
+
+**Features:**
+- Wait for a specified duration in seconds (supports fractional seconds)
+- Context cancellation support for interruption
+- Input validation (positive duration, maximum 1 hour)
+- JSON schema validation for inputs/outputs
+
+**Tool:**
+- `wait` - Wait for a specified duration in seconds
+
+**Input Format:**
+```json
+{
+  "duration": 5.5
+}
+```
+
+**Output Format:**
+```json
+{
+  "message": "Waited for 5.50 seconds"
+}
+```
+
+**Docker Image:**
+```bash
+docker run ghcr.io/mudler/mcps/wait:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "wait": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/wait:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🧠 Memory Server
 
 A persistent memory storage server that allows AI models to store, retrieve, and manage information across sessions using disk-based full-text search.
@@ -992,6 +1041,7 @@ make dev
 # Build specific server
 make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
+make MCP_SERVER=wait build
 make MCP_SERVER=memory build
 make MCP_SERVER=shell build
 make MCP_SERVER=ssh build
@@ -1054,6 +1104,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/weather:latest` - Latest Weather server
 - `ghcr.io/mudler/mcps/weather:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/weather:master` - Development versions
+- `ghcr.io/mudler/mcps/wait:latest` - Latest Wait server
+- `ghcr.io/mudler/mcps/wait:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/wait:master` - Development versions
 - `ghcr.io/mudler/mcps/memory:latest` - Latest Memory server
 - `ghcr.io/mudler/mcps/memory:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/memory:master` - Development versions
