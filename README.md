@@ -816,7 +816,7 @@ mcp:
 
 ### ✅ TODO Server
 
-A shared TODO list management server that allows multiple agents to coordinate tasks with states and assignees. Perfect for agent team coordination.
+A shared TODO list management server that allows multiple agents to coordinate tasks with states, assignees, and dependencies. Perfect for agent team coordination with dependency management and role-based access control.
 
 **Features:**
 - Shared TODO list accessible by multiple agents/processes
@@ -824,43 +824,135 @@ A shared TODO list management server that allows multiple agents to coordinate t
 - File locking for concurrent access safety
 - Task states: pending, in_progress, done
 - Assignee tracking for task ownership
+- **Dependency management** - TODOs can depend on other TODOs
+- **Circular dependency detection** - Prevents invalid dependency chains
+- **Status validation** - Prevents starting/completing TODOs until dependencies are satisfied
+- **Role-based access control** - Admin mode for leader actions, agent mode for self-service
 - Full CRUD operations (add, update, remove, list)
 - Status summary with counts by state and assignee
+- Query ready and blocked TODOs
 
 **Tools:**
-- `add_todo` - Add a new TODO item to the shared list
-- `update_todo_status` - Update the status of a TODO item (pending, in_progress, or done)
-- `update_todo_assignee` - Update the assignee of a TODO item
-- `remove_todo` - Remove a TODO item by ID
+
+**Always Available (Agent & Admin):**
 - `list_todos` - List all TODO items
 - `get_todo_status` - Get a summary of the TODO list with counts by status and assignee
+- `get_ready_todos` - Get all TODO items that are ready to start (pending with all dependencies satisfied)
+- `get_blocked_todos` - Get all TODO items that are blocked by dependencies
+- `get_todo_dependencies` - Get dependencies for a TODO item (direct and optionally transitive)
+- `update_todo_status` - Update the status of a TODO item (pending, in_progress, or done)
+  - In agent mode: Only allows updating TODOs assigned to the agent (requires `agent_name` parameter)
+  - In admin mode: Allows updating any TODO (no `agent_name` required)
+
+**Admin Only (requires `TODO_ADMIN_MODE=true`):**
+- `add_todo` - Add a new TODO item to the shared list
+- `remove_todo` - Remove a TODO item by ID
+- `update_todo_assignee` - Update the assignee of a TODO item
+- `add_todo_dependency` - Add a dependency to a TODO item
+- `remove_todo_dependency` - Remove a dependency from a TODO item
 
 **Configuration:**
 - `TODO_FILE_PATH` - Environment variable to set the TODO file path (default: `/data/todos.json`)
+- `TODO_ADMIN_MODE` - Set to `true` to enable admin-only tools (add, remove, assign, manage dependencies). When not set, only read operations and self-service status updates are available.
 
 **TODO Item Format:**
 ```json
 {
-  "id": "1703123456789000000",
+  "id": "task-1",
   "title": "Implement feature X",
   "status": "in_progress",
-  "assignee": "agent1"
+  "assignee": "agent1",
+  "depends_on": ["task-0"]
 }
 ```
 
 **Add TODO Input Format:**
 ```json
 {
+  "id": "task-1",
   "title": "Implement feature X",
-  "assignee": "agent1"
+  "assignee": "agent1",
+  "depends_on": ["task-0"]
 }
 ```
 
+**Note:** The `id` field is **required** and must be unique. IDs are not auto-generated for predictability.
+
 **Update Status Input Format:**
+
+In admin mode:
 ```json
 {
-  "id": "1703123456789000000",
+  "id": "task-1",
   "status": "done"
+}
+```
+
+In agent mode (requires `agent_name`):
+```json
+{
+  "id": "task-1",
+  "status": "done",
+  "agent_name": "agent1"
+}
+```
+
+**Dependency Management:**
+
+TODOs can depend on other TODOs. A TODO cannot transition to `in_progress` or `done` until all its dependencies are `done`. The system prevents:
+- Circular dependencies (A → B → A)
+- Starting/completing TODOs with unsatisfied dependencies
+- Removing TODOs that other TODOs depend on
+
+**Get Ready TODOs Output Format:**
+```json
+{
+  "items": [
+    {
+      "id": "task-2",
+      "title": "Task 2",
+      "status": "pending",
+      "assignee": "agent1",
+      "depends_on": ["task-1"]
+    }
+  ],
+  "count": 1
+}
+```
+
+**Get Blocked TODOs Output Format:**
+```json
+{
+  "items": [
+    {
+      "id": "task-3",
+      "title": "Task 3",
+      "status": "pending",
+      "assignee": "agent2",
+      "blocked_by": [
+        {
+          "id": "task-1",
+          "title": "Task 1",
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "count": 1
+}
+```
+
+**Get TODO Dependencies Output Format:**
+```json
+{
+  "direct": [
+    {
+      "id": "task-1",
+      "title": "Task 1",
+      "status": "done"
+    }
+  ],
+  "direct_count": 1
 }
 ```
 
@@ -869,10 +961,11 @@ A shared TODO list management server that allows multiple agents to coordinate t
 {
   "items": [
     {
-      "id": "1703123456789000000",
+      "id": "task-1",
       "title": "Implement feature X",
       "status": "in_progress",
-      "assignee": "agent1"
+      "assignee": "agent1",
+      "depends_on": ["task-0"]
     }
   ],
   "count": 1
@@ -886,6 +979,8 @@ A shared TODO list management server that allows multiple agents to coordinate t
   "pending": 3,
   "in_progress": 5,
   "done": 2,
+  "blocked": 2,
+  "ready": 1,
   "by_assignee": {
     "agent1": 4,
     "agent2": 6
@@ -894,11 +989,20 @@ A shared TODO list management server that allows multiple agents to coordinate t
 ```
 
 **Docker Image:**
+
+Agent mode (read-only + self-service):
 ```bash
 docker run -e TODO_FILE_PATH=/custom/path/todos.json -v /host/data:/data ghcr.io/mudler/mcps/todo:latest
 ```
 
+Admin mode (full access):
+```bash
+docker run -e TODO_FILE_PATH=/custom/path/todos.json -e TODO_ADMIN_MODE=true -v /host/data:/data ghcr.io/mudler/mcps/todo:latest
+```
+
 **LocalAI configuration (to add to the model config):**
+
+Agent mode:
 ```yaml
 mcp:
   stdio: |
@@ -917,6 +1021,29 @@ mcp:
       }
     }
 ```
+
+Admin mode:
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "todo": {
+          "command": "docker",
+          "env": {
+            "TODO_FILE_PATH": "/data/todos.json",
+            "TODO_ADMIN_MODE": "true"
+          },
+          "args": [
+            "run", "-i", "--rm", "-v", "/host/data:/data",
+            "ghcr.io/mudler/mcps/todo:master"
+          ]
+        }
+      }
+    }
+```
+
+**Note:** When `TODO_ADMIN_MODE` is not set or set to `false`, only read operations and self-service status updates are available. Agents can only update TODOs assigned to them by providing their `agent_name` in the `update_todo_status` request. Admin mode enables all tools including adding/removing TODOs, managing dependencies, and assigning tasks.
 
 ### 📬 Mailbox Server
 
