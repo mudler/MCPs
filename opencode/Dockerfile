@@ -52,7 +52,7 @@ RUN mkdir -p /tmp/opencode-sessions
 
 # Set environment variables
 ENV OPENCODE_SESSION_DIR=/tmp/opencode-sessions
-ENV OPENCODE_BINARY=/usr/local/bin/opencode
+ENV OPENCODE_BINARY=/usr/bin/opencode
 ENV OPENCODE_MAX_SESSIONS=10
 ENV OPENCODE_LOG_RETENTION_HOURS=24
 ENV OPENCODE_FORMAT=json
