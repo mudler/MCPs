@@ -1,4 +1,4 @@
-# Build stage
+# Build stage for MCP server
 FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
@@ -15,6 +15,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o opencode-mcp-server ./opencode/
 
 # Final stage - use Debian instead of Alpine for glibc compatibility
 FROM debian:bookworm-slim
+
+# Copy opencode binary from the official opencode image
+COPY --from=ghcr.io/anomalyco/opencode:latest /usr/local/bin/opencode /usr/local/bin/opencode
 
 # Install required runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,19 +40,10 @@ RUN (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
     && apt-get install gh -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Install opencode and capture the installation location
-RUN curl -fsSL https://opencode.ai/install | bash && \
-    # Find where opencode was installed and link it to /usr/local/bin
-    if [ -f /root/.local/bin/opencode ]; then \
-        ln -s /root/.local/bin/opencode /usr/local/bin/opencode; \
-    elif [ -f /root/.opencode/bin/opencode ]; then \
-        ln -s /root/.opencode/bin/opencode /usr/local/bin/opencode; \
-    fi
-
 # Copy the MCP server binary
 COPY --from=builder /app/opencode-mcp-server /usr/local/bin/opencode-mcp-server
 
-# Verify opencode works in final container
+# Verify opencode binary is properly installed
 RUN which opencode && opencode --version || echo "Warning: opencode may not be properly installed"
 
 # Create session directory
