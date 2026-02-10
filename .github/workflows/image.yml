@@ -30,6 +30,12 @@ jobs:
           - mcp: memory
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: shell
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: ssh
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: homeassistant
             dockerfile: ./Dockerfile
             context: ./
