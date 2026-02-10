@@ -31,7 +31,7 @@ jobs:
             dockerfile: ./Dockerfile
             context: ./
           - mcp: shell
-            dockerfile: ./Dockerfile
+            dockerfile: ./shell/Dockerfile
             context: ./
           - mcp: ssh
             dockerfile: ./Dockerfile
