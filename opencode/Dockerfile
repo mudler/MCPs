@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -fsSL https://opencode.ai/install | bash
+
+RUN ln -s /root/.opencode/bin/opencode /usr/bin/opencode
+
 # Install GitHub CLI
 RUN (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
     && mkdir -p -m 755 /etc/apt/keyrings \
