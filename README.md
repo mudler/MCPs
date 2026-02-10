@@ -1146,6 +1146,128 @@ mcp:
 
 **Note:** Each agent instance must have a unique `MAILBOX_AGENT_NAME` to properly filter and manage its own messages. The mailbox file is shared across all agents, but each agent only sees messages where it is the recipient.
 
+### 🚀 Opencode Server
+
+An MCP server for controlling opencode AI sessions asynchronously. Start sessions, monitor progress, retrieve logs, and manage multiple concurrent opencode processes.
+
+**Features:**
+- Async session management with unique session IDs
+- Start opencode sessions with full command-line option support
+- Monitor session status (running, completed, failed, stopped)
+- Retrieve stdout/stderr logs from sessions
+- Stop running sessions gracefully
+- List all sessions with filtering by status
+- Configurable concurrent session limits
+- Automatic log cleanup based on retention policy
+- Ephemeral sessions (do not survive server restarts)
+
+**Tools:**
+- `start_session` - Start a new opencode session with a message and options
+- `get_session_status` - Get the current status of a session by ID
+- `get_session_logs` - Retrieve stdout and stderr logs from a session
+- `stop_session` - Stop a running session
+- `list_sessions` - List all sessions with optional status filtering
+
+**Configuration:**
+- `OPENCODE_SESSION_DIR` - Directory for session state and logs (default: `/tmp/opencode-sessions`)
+- `OPENCODE_BINARY` - Path to opencode binary (default: `/usr/local/bin/opencode`)
+- `OPENCODE_MAX_SESSIONS` - Maximum number of concurrent sessions (default: `10`)
+- `OPENCODE_LOG_RETENTION_HOURS` - Hours to retain session logs before cleanup (default: `24`)
+- `OPENCODE_CONFIG` - Path to opencode config file
+- `OPENCODE_CONFIG_CONTENT` - Inline config as JSON string
+- `OPENCODE_MODEL` - Model to use in provider/model format (e.g., `openai/gpt-4`)
+- `OPENCODE_FORMAT` - Output format: `default` (formatted) or `json` (raw JSON events) (default: `json`)
+- `OPENCODE_AGENT` - Agent to use for sessions
+- `OPENCODE_SHARE` - Share sessions: `true` or `false` (default: `false`)
+- `OPENCODE_VARIANT` - Model variant for provider-specific reasoning effort
+
+**Start Session Example:**
+```json
+{
+  "message": "Explain quantum computing",
+  "title": "Quantum Computing Explanation"
+}
+```
+
+**Start Session Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "starting",
+  "message": "Session started successfully"
+}
+```
+
+**Get Session Status Example:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Get Session Status Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "pid": "12345",
+  "exit_code": "0",
+  "created_at": "2025-01-15T10:30:00Z",
+  "started_at": "2025-01-15T10:30:01Z",
+  "stopped_at": "2025-01-15T10:30:15Z",
+  "duration": "14s"
+}
+```
+
+**Get Session Logs Example:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "lines": 50
+}
+```
+
+**Get Session Logs Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "stdout": "Quantum computing is a form of computing that takes advantage...",
+  "stderr": "",
+  "line_count": 50
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e OPENCODE_MAX_SESSIONS=5 -e OPENCODE_LOG_RETENTION_HOURS=48 ghcr.io/mudler/mcps/opencode:latest
+```
+
+**With model configuration:**
+```bash
+docker run -e OPENCODE_MODEL=openai/gpt-4 -e OPENCODE_FORMAT=json ghcr.io/mudler/mcps/opencode:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "opencode": {
+          "command": "docker",
+          "env": {
+            "OPENCODE_MAX_SESSIONS": "5",
+            "OPENCODE_LOG_RETENTION_HOURS": "48"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/opencode:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -1258,6 +1380,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/mailbox:latest` - Latest Mailbox server
 - `ghcr.io/mudler/mcps/mailbox:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/mailbox:master` - Development versions
+- `ghcr.io/mudler/mcps/opencode:latest` - Latest Opencode server
+- `ghcr.io/mudler/mcps/opencode:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/opencode:master` - Development versions
 
 ## Contributing
 
