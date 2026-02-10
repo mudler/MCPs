@@ -44,8 +44,8 @@ COPY --from=builder /app/shell-mcp-server /usr/local/bin/shell-mcp-server
 RUN mkdir -p /tmp/shell-sessions
 
 # Set environment variables
-ENV SHELL_CMD=sh -c
-ENV SHELL_WORKING_DIR=
+ENV SHELL_CMD="bash -c"
+ENV SHELL_WORKING_DIR="/root"
 ENV TOOL_NAME=execute_command
 
 # Run the MCP server
