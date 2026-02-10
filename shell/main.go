@@ -37,6 +37,12 @@ func getShellCommand() string {
 	return shellCmd
 }
 
+// getWorkingDirectory returns the working directory from SHELL_WORKING_DIR env var,
+// or empty string (use current directory) if not set
+func getWorkingDirectory() string {
+	return os.Getenv("SHELL_WORKING_DIR")
+}
+
 // ExecuteCommand executes a shell script and returns the output
 func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input ExecuteCommandInput) (
 	*mcp.CallToolResult,
@@ -70,6 +76,11 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 
 	// Execute script using the configured shell
 	cmd := exec.CommandContext(cmdCtx, shellExec, shellArgs...)
+
+	// Set working directory from environment variable if specified
+	if workDir := getWorkingDirectory(); workDir != "" {
+		cmd.Dir = workDir
+	}
 
 	// Create buffers to capture stdout and stderr separately
 	var stdoutBuf, stderrBuf bytes.Buffer
@@ -118,7 +129,7 @@ func main() {
 		Version: "v1.0.0",
 	}, nil)
 
-	configurableName := os.GetEnv("TOOL_NAME")
+	configurableName := os.Getenv("TOOL_NAME")
 	if configurableName == "" {
 		configurableName = "execute_command"
 	}
@@ -126,7 +137,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh')",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server

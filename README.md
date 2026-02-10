@@ -416,7 +416,8 @@ A shell script execution server that allows AI models to execute shell scripts a
 - `execute_command` - Execute a shell script and return the output, exit code, and any errors
 
 **Configuration:**
-- `SHELL_CMD` - Environment variable to set the shell command to use (default: `sh`). Can include arguments, e.g., `bash -x` or `zsh`
+- `SHELL_CMD` - Environment variable to set the shell command to use (default: `sh -c`). Can include arguments, e.g., `bash -x` or `zsh`
+- `SHELL_WORKING_DIR` - Environment variable to set the working directory for script execution (default: current directory)
 
 **Input Format:**
 ```json
@@ -443,6 +444,11 @@ A shell script execution server that allows AI models to execute shell scripts a
 docker run -e SHELL_CMD=bash ghcr.io/mudler/mcps/shell:latest
 ```
 
+With custom working directory:
+```bash
+docker run -e SHELL_CMD=bash -e SHELL_WORKING_DIR=/workspace ghcr.io/mudler/mcps/shell:latest
+```
+
 **LocalAI configuration ( to add to the model config):**
 ```yaml
 mcp:
@@ -452,7 +458,8 @@ mcp:
         "shell": {
           "command": "docker",
           "env": {
-            "SHELL_CMD": "bash"
+            "SHELL_CMD": "bash",
+            "SHELL_WORKING_DIR": "/workspace"
           },
           "args": [
             "run", "-i", "--rm",
