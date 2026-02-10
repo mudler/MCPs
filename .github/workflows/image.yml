@@ -17,7 +17,40 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mcp: [duckduckgo, weather, wait, memory, homeassistant, scripts, localrecall, twitter, todo, mailbox]
+        include:
+          - mcp: duckduckgo
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: weather
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: wait
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: memory
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: homeassistant
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: scripts
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: localrecall
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: twitter
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: todo
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: mailbox
+            dockerfile: ./Dockerfile
+            context: ./
+          - mcp: opencode
+            dockerfile: ./opencode/Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read
@@ -57,8 +90,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           builder: ${{ steps.buildx.outputs.name }}
-          context: ./
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -72,8 +105,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           builder: ${{ steps.buildx.outputs.name }}
-          context: ./
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -11,6 +11,15 @@ GO_VERSION ?= 1.25.1
 # Docker image name
 IMAGE_NAME = $(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY)/$(MCP_SERVER)
 
+# Docker build configuration - can be overridden per server
+DOCKER_CONTEXT ?= ./
+DOCKER_FILE ?= ./Dockerfile
+
+# Override for opencode (custom Dockerfile)
+ifeq ($(MCP_SERVER),opencode)
+DOCKER_FILE = ./opencode/Dockerfile
+endif
+
 # Default target
 .PHONY: help
 help: ## Show this help message
@@ -20,23 +29,27 @@ help: ## Show this help message
 .PHONY: build
 build: ## Build the Docker image locally
 	@echo "Building Docker image: $(IMAGE_NAME):$(DOCKER_TAG)"
+	@echo "Using Dockerfile: $(DOCKER_FILE)"
+	@echo "Build context: $(DOCKER_CONTEXT)"
 	docker build \
 		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
-		-f Dockerfile \
-		.
+		-f $(DOCKER_FILE) \
+		$(DOCKER_CONTEXT)
 
 .PHONY: build-multiarch
 build-multiarch: ## Build multi-architecture Docker image (requires buildx)
 	@echo "Building multi-architecture Docker image: $(IMAGE_NAME):$(DOCKER_TAG)"
+	@echo "Using Dockerfile: $(DOCKER_FILE)"
+	@echo "Build context: $(DOCKER_CONTEXT)"
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
 		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
-		-f Dockerfile \
-		.
+		-f $(DOCKER_FILE) \
+		$(DOCKER_CONTEXT)
 
 .PHONY: run
 run: build ## Build and run the container locally
@@ -46,12 +59,14 @@ run: build ## Build and run the container locally
 .PHONY: test-build
 test-build: ## Test build without pushing (similar to PR build in CI)
 	@echo "Testing build (PR mode): $(IMAGE_NAME):$(DOCKER_TAG)"
+	@echo "Using Dockerfile: $(DOCKER_FILE)"
+	@echo "Build context: $(DOCKER_CONTEXT)"
 	docker build \
 		--build-arg MCP_SERVER=$(MCP_SERVER) \
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		-t $(IMAGE_NAME):$(DOCKER_TAG) \
-		-f Dockerfile \
-		.
+		-f $(DOCKER_FILE) \
+		$(DOCKER_CONTEXT)
 
 .PHONY: push
 push: build ## Build and push to registry (requires authentication)
@@ -150,3 +165,5 @@ info: ## Show build information
 	@echo "Go Version: $(GO_VERSION)"
 	@echo "Docker Registry: $(DOCKER_REGISTRY)"
 	@echo "Repository: $(DOCKER_REPOSITORY)"
+	@echo "Dockerfile: $(DOCKER_FILE)"
+	@echo "Context: $(DOCKER_CONTEXT)"
