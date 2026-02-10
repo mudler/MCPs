@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     bash \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
