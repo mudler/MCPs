@@ -111,16 +111,6 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 
 	sm.sessions[id] = session
 
-	// Save state immediately after creation
-	if sm.store != nil {
-		sm.store.Save(sm.GetAllSessions())
-	}
-
-	// Record metrics
-	RecordSessionCreated()
-	logger := GetLogger()
-	logger.Info("Created session %s with PID %s", id, session.PID)
-
 	// Start the process asynchronously
 	go sm.runSession(session)
 
@@ -146,71 +136,34 @@ func (sm *SessionManager) runSession(session *Session) {
 	// Run the process
 	err := session.Process.Run()
 	if err != nil {
-		sm.updateSessionStatus(session, "failed", "-1")
+		session.Status = "failed"
+		session.ExitCode = "-1"
+		session.StoppedAt = time.Now()
 		return
 	}
 
 	session.PID = session.Process.PID
 
-	// Create ticker for periodic state saving
-	stateSaveTicker := time.NewTicker(10 * time.Second)
-	defer stateSaveTicker.Stop()
-
 	// Wait for process to complete by polling
 	// The process manager handles the process lifecycle
 	// We poll to check when it's done
 	for {
-		select {
-		case <-stateSaveTicker.C:
-			// Periodic save of session state during execution
-			if sm.store != nil {
-				sm.store.Save(sm.GetAllSessions())
-			}
-		default:
-			time.Sleep(100 * time.Millisecond)
-			// Check if process is still running by checking if we can get exit code
-			exitCode, err := session.Process.ExitCode()
-			if err == nil && exitCode != "" {
-				// Process has completed
-				sm.updateSessionStatus(session, session.Status, exitCode)
-				return
-			}
+		time.Sleep(100 * time.Millisecond)
+		// Check if process is still running by checking if we can get exit code
+		exitCode, err := session.Process.ExitCode()
+		if err == nil && exitCode != "" {
+			// Process has completed
+			session.ExitCode = exitCode
+			break
 		}
 	}
-}
-
-// updateSessionStatus safely updates session status with proper locking and persistence
-func (sm *SessionManager) updateSessionStatus(session *Session, status string, exitCode string) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
 
 	session.StoppedAt = time.Now()
-	session.ExitCode = exitCode
-	oldStatus := session.Status
 
-	if exitCode == "0" {
+	if session.ExitCode == "0" {
 		session.Status = "completed"
 	} else {
 		session.Status = "failed"
-	}
-
-	// Save state immediately
-	if sm.store != nil {
-		sm.store.Save(sm.GetAllSessions())
-	}
-
-	// Log and track metrics
-	logger := GetLogger()
-	duration := time.Since(session.StartedAt).Round(time.Second)
-
-	if oldStatus == "running" || oldStatus == "starting" {
-		if session.Status == "completed" {
-			RecordSessionCompleted()
-			logger.Info("Session %s completed successfully (duration: %s)", session.ID, duration)
-		} else {
-			RecordSessionFailed()
-			logger.Warn("Session %s failed with exit code %s (duration: %s)", session.ID, exitCode, duration)
-		}
 	}
 
 	// Schedule cleanup based on retention policy
@@ -245,20 +198,6 @@ func (sm *SessionManager) StopSession(id string, force bool) error {
 
 	session.Status = "stopped"
 	session.StoppedAt = time.Now()
-	session.ExitCode = "-1"
-
-	// Save state immediately
-	if sm.store != nil {
-		sessions := make(map[string]*Session, len(sm.sessions))
-		for sid, s := range sm.sessions {
-			sessions[sid] = s
-		}
-		go sm.store.Save(sessions)
-	}
-
-	// Schedule cleanup
-	go sm.scheduleCleanup(id)
-
 	return nil
 }
 
@@ -311,110 +250,38 @@ func (sm *SessionManager) ListSessions(statusFilter string) []*Session {
 	return result
 }
 
-// GetAllSessions returns all sessions as a map (for persistence)
-func (sm *SessionManager) GetAllSessions() map[string]*Session {
-	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
-
-	result := make(map[string]*Session, len(sm.sessions))
-	for id, session := range sm.sessions {
-		result[id] = session
-	}
-	return result
-}
-
 // StopAllSessions stops all running sessions (called on server shutdown)
 func (sm *SessionManager) StopAllSessions() {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	// Save final state before stopping
-	if sm.store != nil {
-		sessions := make(map[string]*Session, len(sm.sessions))
-		for sid, s := range sm.sessions {
-			sessions[sid] = s
-		}
-		sm.store.Save(sessions)
-		sm.store.StopAutoSave()
-	}
-
 	for _, session := range sm.sessions {
 		if session.Status == "running" || session.Status == "starting" {
 			session.Process.Stop()
-			session.Status = "stopped"
-			session.StoppedAt = time.Now()
-			session.ExitCode = "-1"
 		}
+		// Clean up session directory
+		os.RemoveAll(session.StateDir)
 	}
-
-	// Save final state after stopping
-	if sm.store != nil {
-		sessions := make(map[string]*Session, len(sm.sessions))
-		for sid, s := range sm.sessions {
-			sessions[sid] = s
-		}
-		sm.store.Save(sessions)
-	}
+	// Clear sessions map
+	sm.sessions = make(map[string]*Session)
 }
 
 // scheduleCleanup schedules cleanup of old session based on retention policy
 func (sm *SessionManager) scheduleCleanup(sessionID string) {
-	sm.mutex.Lock()
-	session, exists := sm.sessions[sessionID]
-	if !exists {
-		sm.mutex.Unlock()
-		return
+	retentionHours := getEnvInt("OPENCODE_LOG_RETENTION_HOURS", 24)
+	if retentionHours <= 0 {
+		return // No cleanup scheduled
 	}
 
-	// Get retention hours based on session status
-	retentionHours := 24
-	if sm.retentionHours != nil {
-		if hours, ok := sm.retentionHours[session.Status]; ok && hours > 0 {
-			retentionHours = hours
+	time.AfterFunc(time.Duration(retentionHours)*time.Hour, func() {
+		sm.mutex.Lock()
+		defer sm.mutex.Unlock()
+
+		if session, exists := sm.sessions[sessionID]; exists {
+			os.RemoveAll(session.StateDir)
+			delete(sm.sessions, sessionID)
 		}
-	}
-
-	// Also check how old the session is - clean immediately if past retention
-	if session.StoppedAt.IsZero() {
-		session.StoppedAt = time.Now()
-	}
-
-	// Calculate when cleanup should occur
-	retentionDuration := time.Duration(retentionHours) * time.Hour
-	cleanupTime := session.StoppedAt.Add(retentionDuration)
-	timeUntilCleanup := time.Until(cleanupTime)
-
-	// If already past retention, clean up immediately
-	if timeUntilCleanup <= 0 {
-		sm.mutex.Unlock()
-		sm.performCleanup(sessionID)
-		return
-	}
-	sm.mutex.Unlock()
-
-	// Schedule future cleanup
-	time.AfterFunc(timeUntilCleanup, func() {
-		sm.performCleanup(sessionID)
 	})
-}
-
-// performCleanup actually performs the cleanup of a session
-func (sm *SessionManager) performCleanup(sessionID string) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	if session, exists := sm.sessions[sessionID]; exists {
-		// Delete from persistence first
-		if sm.store != nil {
-			sm.store.Delete(sessionID)
-		}
-
-		// Remove session directory
-		os.RemoveAll(session.StateDir)
-
-		// Remove from memory
-		delete(sm.sessions, sessionID)
-	}
 }
 
 // getLastNLines returns the last n lines of a string
@@ -424,81 +291,4 @@ func getLastNLines(s string, n int) string {
 		return s
 	}
 	return strings.Join(lines[len(lines)-n:], "\n")
-}
-
-// LoadSessions loads existing sessions from persistence on startup
-func (sm *SessionManager) LoadSessions() error {
-	if sm.store == nil {
-		return nil
-	}
-
-	states, err := sm.store.Load()
-	if err != nil {
-		return err
-	}
-
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	for _, state := range states {
-		// Check if session directory still exists
-		if _, err := os.Stat(state.StateDir); os.IsNotExist(err) {
-			// Session directory was deleted, skip this session
-			continue
-		}
-
-		session := &Session{
-			ID:        state.ID,
-			Status:    state.Status,
-			PID:       state.PID,
-			Message:   state.Message,
-			Model:     state.Model,
-			CreatedAt: state.CreatedAt,
-			StartedAt: state.StartedAt,
-			StoppedAt: state.StoppedAt,
-			ExitCode:  state.ExitCode,
-			StateDir:  state.StateDir,
-		}
-
-		// Handle recovery based on status
-		switch session.Status {
-		case "running", "starting":
-			// Try to recover process state
-			if err := sm.recoverProcess(session); err != nil {
-				session.Status = "unknown"
-			}
-		}
-
-		sm.sessions[session.ID] = session
-
-		// Schedule cleanup based on current status
-		if session.Status != "running" && session.Status != "starting" {
-			go sm.scheduleCleanup(session.ID)
-		}
-	}
-
-	return nil
-}
-
-// recoverProcess attempts to recover a process from a persisted session
-func (sm *SessionManager) recoverProcess(session *Session) error {
-	// Check if process is still running by trying to find it
-	if session.PID == "" {
-		return fmt.Errorf("no PID available for session %s", session.ID)
-	}
-
-	// Try to load process state from the session directory
-	processStatePath := filepath.Join(session.StateDir, "process.state")
-	if _, err := os.Stat(processStatePath); err == nil {
-		// Process state file exists, try to recover
-		// Note: This is a best-effort recovery
-		session.Status = "unknown"
-	} else {
-		// No process state file, mark as failed
-		session.Status = "failed"
-		session.ExitCode = "-1"
-		session.StoppedAt = time.Now()
-	}
-
-	return nil
 }
