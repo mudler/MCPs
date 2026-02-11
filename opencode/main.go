@@ -29,10 +29,12 @@ type Session struct {
 
 // SessionManager manages all opencode sessions
 type SessionManager struct {
-	sessions    map[string]*Session
-	mutex       sync.RWMutex
-	sessionDir  string
-	maxSessions int
+	sessions       map[string]*Session
+	mutex          sync.RWMutex
+	sessionDir     string
+	maxSessions    int
+	store          *JSONSessionStore
+	retentionHours map[string]int // retention hours by status
 }
 
 // Global session manager
@@ -57,9 +59,18 @@ func getEnvInt(key string, defaultValue int) int {
 }
 
 func main() {
+	// Initialize logger first
+	InitLogger()
+	logger := GetLogger()
+
+	logger.Info("Starting OpenCode MCP server")
+
 	// Initialize session manager
 	sessionDir := getEnv("OPENCODE_SESSION_DIR", "/tmp/opencode-sessions")
 	maxSessions := getEnvInt("OPENCODE_MAX_SESSIONS", 10)
+
+	logger.Info("Session directory: %s", sessionDir)
+	logger.Info("Max sessions: %d", maxSessions)
 
 	// Ensure session directory exists
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -70,6 +81,28 @@ func main() {
 		sessions:    make(map[string]*Session),
 		sessionDir:  sessionDir,
 		maxSessions: maxSessions,
+		retentionHours: map[string]int{
+			"completed": getEnvInt("OPENCODE_COMPLETED_RETENTION_HOURS", getEnvInt("OPENCODE_DEFAULT_RETENTION_HOURS", 168)), // 7 days default
+			"failed":    getEnvInt("OPENCODE_FAILED_RETENTION_HOURS", 24),
+			"stopped":   getEnvInt("OPENCODE_STOPPED_RETENTION_HOURS", 48),
+			"running":   0, // Never clean up running sessions
+			"starting":  0, // Never clean up starting sessions
+		},
+	}
+
+	// Initialize persistence store
+	globalSessionManager.store = NewJSONSessionStore(sessionDir, globalSessionManager)
+
+	// Start auto-save
+	autoSaveInterval := getEnvDuration("OPENCODE_AUTO_SAVE_INTERVAL", 30*time.Second)
+	globalSessionManager.store.StartAutoSave(autoSaveInterval)
+	defer globalSessionManager.store.StopAutoSave()
+
+	// Load existing sessions on startup
+	if err := globalSessionManager.LoadSessions(); err != nil {
+		log.Printf("Warning: Failed to load existing sessions: %v", err)
+	} else {
+		log.Printf("Loaded %d existing sessions", len(globalSessionManager.sessions))
 	}
 
 	// Create MCP server
