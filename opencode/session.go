@@ -97,6 +97,7 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 		processmanager.WithArgs(args...),
 		processmanager.WithStateDir(sessionDir),
 		processmanager.WithWorkDir(sessionDir),
+		processmanager.WithEnvironment(os.Environ()...),
 	)
 
 	session := &Session{
@@ -121,17 +122,6 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 func (sm *SessionManager) runSession(session *Session) {
 	session.StartedAt = time.Now()
 	session.Status = "running"
-
-	// Set up environment variables for opencode
-	env := os.Environ()
-
-	// Add config from environment if provided
-	if configContent := os.Getenv("OPENCODE_CONFIG_CONTENT"); configContent != "" {
-		env = append(env, fmt.Sprintf("OPENCODE_CONFIG_CONTENT=%s", configContent))
-	}
-	if configPath := os.Getenv("OPENCODE_CONFIG"); configPath != "" {
-		env = append(env, fmt.Sprintf("OPENCODE_CONFIG=%s", configPath))
-	}
 
 	// Run the process
 	err := session.Process.Run()
