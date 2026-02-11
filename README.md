@@ -1187,6 +1187,7 @@ An MCP server for controlling opencode AI sessions asynchronously. Start session
 - `OPENCODE_AGENT` - Agent to use for sessions
 - `OPENCODE_SHARE` - Share sessions: `true` or `false` (default: `false`)
 - `OPENCODE_VARIANT` - Model variant for provider-specific reasoning effort
+- `OPENCODE_WORKDIR` - Directory where opencode starts (default: `/root`)
 
 **Start Session Example:**
 ```json

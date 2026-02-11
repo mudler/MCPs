@@ -29,10 +29,10 @@ type Session struct {
 
 // SessionManager manages all opencode sessions
 type SessionManager struct {
-	sessions    map[string]*Session
-	mutex       sync.RWMutex
-	sessionDir  string
-	maxSessions int
+	sessions            map[string]*Session
+	mutex               sync.RWMutex
+	sessionDir, workDir string
+	maxSessions         int
 }
 
 // Global session manager
@@ -60,6 +60,7 @@ func main() {
 	// Initialize session manager
 	sessionDir := getEnv("OPENCODE_SESSION_DIR", "/tmp/opencode-sessions")
 	maxSessions := getEnvInt("OPENCODE_MAX_SESSIONS", 10)
+	workDir := getEnv("OPENCODE_WORK_DIR", "/root")
 
 	// Ensure session directory exists
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -69,6 +70,7 @@ func main() {
 	globalSessionManager = &SessionManager{
 		sessions:    make(map[string]*Session),
 		sessionDir:  sessionDir,
+		workDir:     workDir,
 		maxSessions: maxSessions,
 	}
 

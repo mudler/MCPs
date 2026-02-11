@@ -96,7 +96,7 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 		processmanager.WithName(opencodeBinary),
 		processmanager.WithArgs(args...),
 		processmanager.WithStateDir(sessionDir),
-		processmanager.WithWorkDir(sessionDir),
+		processmanager.WithWorkDir(sm.workDir),
 		processmanager.WithEnvironment(os.Environ()...),
 	)
 
