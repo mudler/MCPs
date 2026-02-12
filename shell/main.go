@@ -123,6 +123,18 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 }
 
 func main() {
+	// Run initialization script if SHELL_INIT_SCRIPT is set
+	if initScript := os.Getenv("SHELL_INIT_SCRIPT"); initScript != "" {
+		log.Printf("Running initialization script: %s", initScript)
+		cmd := exec.CommandContext(context.Background(), "sh", "-c", initScript)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("Initialization script failed: %v", err)
+		}
+		log.Println("Initialization script completed successfully")
+	}
+
 	// Create MCP server for shell command execution
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "shell",
@@ -137,7 +149,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server
