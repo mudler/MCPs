@@ -54,6 +54,9 @@ jobs:
           - mcp: mailbox
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: filesystem
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: opencode
             dockerfile: ./opencode/Dockerfile
             context: ./

@@ -1153,6 +1153,99 @@ mcp:
 
 **Note:** Each agent instance must have a unique `MAILBOX_AGENT_NAME` to properly filter and manage its own messages. The mailbox file is shared across all agents, but each agent only sees messages where it is the recipient.
 
+### 📁 Filesystem Server
+
+A filesystem operations server that provides tools to read, write, edit, and search files and directories.
+
+**Features:**
+- Read files with line numbers and optional offset/limit
+- Write files with automatic parent directory creation
+- Edit files with string replacement (single or all occurrences)
+- Find files by glob patterns (sorted by modification time)
+- Search file contents with regex patterns
+- JSON schema validation for inputs/outputs
+
+**Tools:**
+- `read` - Read file with line numbers, supports optional offset and limit for reading specific line ranges
+- `write` - Write content to a file, creates parent directories if needed, overwrites existing files
+- `edit` - Replace old string with new string in a file, old string must be unique unless all=true
+- `glob` - Find files by glob pattern, sorted by modification time (newest first)
+- `grep` - Search files for regex pattern, returns up to 50 matches
+
+**Read File Input Format:**
+```json
+{
+  "path": "/path/to/file.txt",
+  "offset": 0,
+  "limit": 50
+}
+```
+
+**Read File Output Format:**
+```json
+{
+  "content": "   1| line one\n   2| line two",
+  "total_lines": 100,
+  "success": true
+}
+```
+
+**Write File Input Format:**
+```json
+{
+  "path": "/path/to/file.txt",
+  "content": "file content here"
+}
+```
+
+**Edit File Input Format:**
+```json
+{
+  "path": "/path/to/file.txt",
+  "old": "old text",
+  "new": "new text",
+  "all": false
+}
+```
+
+**Glob Files Input Format:**
+```json
+{
+  "pat": "**/*.go",
+  "path": "."
+}
+```
+
+**Grep Files Input Format:**
+```json
+{
+  "pat": "func main",
+  "path": "."
+}
+```
+
+**Docker Image:**
+```bash
+docker run -v /host/workspace:/workspace ghcr.io/mudler/mcps/filesystem:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "filesystem": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm", "-v", "/host/workspace:/workspace",
+            "ghcr.io/mudler/mcps/filesystem:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🚀 Opencode Server
 
 An MCP server for controlling opencode AI sessions asynchronously. Start sessions, monitor progress, retrieve logs, and manage multiple concurrent opencode processes.
@@ -1306,6 +1399,7 @@ make MCP_SERVER=scripts build
 make MCP_SERVER=localrecall build
 make MCP_SERVER=todo build
 make MCP_SERVER=mailbox build
+make MCP_SERVER=filesystem build
 
 # Run tests and checks
 make ci-local
@@ -1391,6 +1485,9 @@ Docker images are automatically built and pushed to GitHub Container Registry:
 - `ghcr.io/mudler/mcps/opencode:latest` - Latest Opencode server
 - `ghcr.io/mudler/mcps/opencode:v1.0.0` - Tagged versions
 - `ghcr.io/mudler/mcps/opencode:master` - Development versions
+- `ghcr.io/mudler/mcps/filesystem:latest` - Latest Filesystem server
+- `ghcr.io/mudler/mcps/filesystem:v1.0.0` - Tagged versions
+- `ghcr.io/mudler/mcps/filesystem:master` - Development versions
 
 ## Contributing
 
