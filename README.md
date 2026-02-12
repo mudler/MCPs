@@ -172,6 +172,10 @@ A persistent memory storage server that allows AI models to store, retrieve, and
 
 **Configuration:**
 - `MEMORY_INDEX_PATH` - Environment variable to set the bleve index path (default: `/data/memory.bleve`)
+- `MEMORY_ADD_TOOL_NAME` - Environment variable to override the name of the add memory tool (default: `add_memory`)
+- `MEMORY_LIST_TOOL_NAME` - Environment variable to override the name of the list memory tool (default: `list_memory`)
+- `MEMORY_REMOVE_TOOL_NAME` - Environment variable to override the name of the remove memory tool (default: `remove_memory`)
+- `MEMORY_SEARCH_TOOL_NAME` - Environment variable to override the name of the search memory tool (default: `search_memory`)
 
 **Add Memory Input Format:**
 ```json
@@ -221,7 +225,16 @@ A persistent memory storage server that allows AI models to store, retrieve, and
 
 **Docker Image:**
 ```bash
+# Basic usage with default tool names
 docker run -e MEMORY_INDEX_PATH=/custom/path/memory.bleve ghcr.io/mudler/mcps/memory:latest
+
+# Usage with custom tool names
+docker run -e MEMORY_INDEX_PATH=/custom/path/memory.bleve \
+  -e MEMORY_ADD_TOOL_NAME=store \
+  -e MEMORY_LIST_TOOL_NAME=list \
+  -e MEMORY_REMOVE_TOOL_NAME=delete \
+  -e MEMORY_SEARCH_TOOL_NAME=find \
+  ghcr.io/mudler/mcps/memory:latest
 ```
 
 **LocalAI configuration ( to add to the model config):**
@@ -233,10 +246,19 @@ mcp:
         "memory": {
           "command": "docker",
           "env": {
-            "MEMORY_INDEX_PATH": "/data/memory.bleve"
+            "MEMORY_INDEX_PATH": "/data/memory.bleve",
+            "MEMORY_ADD_TOOL_NAME": "store",
+            "MEMORY_LIST_TOOL_NAME": "list",
+            "MEMORY_REMOVE_TOOL_NAME": "delete",
+            "MEMORY_SEARCH_TOOL_NAME": "find"
           },
           "args": [
             "run", "-i", "--rm", "-v", "/host/data:/data",
+            "-e", "MEMORY_INDEX_PATH",
+            "-e", "MEMORY_ADD_TOOL_NAME",
+            "-e", "MEMORY_LIST_TOOL_NAME",
+            "-e", "MEMORY_REMOVE_TOOL_NAME",
+            "-e", "MEMORY_SEARCH_TOOL_NAME",
             "ghcr.io/mudler/mcps/memory:master"
           ]
         }
