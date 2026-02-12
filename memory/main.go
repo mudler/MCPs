@@ -296,24 +296,45 @@ func main() {
 	// Create a server with memory tools
 	server := mcp.NewServer(&mcp.Implementation{Name: "memory", Version: "v2.0.0"}, nil)
 
+	// Get configurable tool names from environment variables
+	addToolName := os.Getenv("MEMORY_ADD_TOOL_NAME")
+	if addToolName == "" {
+		addToolName = "add_memory"
+	}
+
+	listToolName := os.Getenv("MEMORY_LIST_TOOL_NAME")
+	if listToolName == "" {
+		listToolName = "list_memory"
+	}
+
+	removeToolName := os.Getenv("MEMORY_REMOVE_TOOL_NAME")
+	if removeToolName == "" {
+		removeToolName = "remove_memory"
+	}
+
+	searchToolName := os.Getenv("MEMORY_SEARCH_TOOL_NAME")
+	if searchToolName == "" {
+		searchToolName = "search_memory"
+	}
+
 	// Register memory tools
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "add_memory",
+		Name:        addToolName,
 		Description: "Add a new entry to memory storage",
 	}, AddMemory)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_memory",
+		Name:        listToolName,
 		Description: "List all memory entry names",
 	}, ListMemory)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "remove_memory",
+		Name:        removeToolName,
 		Description: "Remove a memory entry by ID",
 	}, RemoveMemory)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "search_memory",
+		Name:        searchToolName,
 		Description: "Search memory entries by name and content using full-text search",
 	}, SearchMemory)
 
