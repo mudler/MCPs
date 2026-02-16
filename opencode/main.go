@@ -80,29 +80,54 @@ func main() {
 		Version: "v1.0.0",
 	}, nil)
 
+	startSessionName := os.Getenv("OPENCODE_TOOL_START_SESSION_NAME")
+	if startSessionName == "" {
+		startSessionName = "start_session"
+	}
+
+	getSessionStatusName := os.Getenv("OPENCODE_TOOL_GET_SESSION_STATUS_NAME")
+	if getSessionStatusName == "" {
+		getSessionStatusName = "get_session_status"
+	}
+
+	getSessionLogsName := os.Getenv("OPENCODE_TOOL_GET_SESSION_LOGS_NAME")
+	if getSessionLogsName == "" {
+		getSessionLogsName = "get_session_logs"
+	}
+
+	stopSessionName := os.Getenv("OPENCODE_TOOL_STOP_SESSION_NAME")
+	if stopSessionName == "" {
+		stopSessionName = "stop_session"
+	}
+
+	listSessionsName := os.Getenv("OPENCODE_TOOL_LIST_SESSIONS_NAME")
+	if listSessionsName == "" {
+		listSessionsName = "list_sessions"
+	}
+
 	// Register tools
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "start_session",
+		Name:        startSessionName,
 		Description: "Start a new opencode session with a message. Returns a session ID that can be used to check status and retrieve logs.",
 	}, StartSessionHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_session_status",
+		Name:        getSessionStatusName,
 		Description: "Get the status of an opencode session by ID. Returns running, completed, failed, or not_found.",
 	}, GetSessionStatusHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "get_session_logs",
+		Name:        getSessionLogsName,
 		Description: "Get the stdout and stderr logs from an opencode session. Optionally specify the number of lines to retrieve (default 100).",
 	}, GetSessionLogsHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "stop_session",
+		Name:        stopSessionName,
 		Description: "Stop a running opencode session by ID. Optionally force kill the process.",
 	}, StopSessionHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "list_sessions",
+		Name:        listSessionsName,
 		Description: "List all opencode sessions. Optionally filter by status: running, completed, failed, or all.",
 	}, ListSessionsHandler)
 
