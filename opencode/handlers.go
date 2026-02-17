@@ -212,7 +212,7 @@ func ListSessionsHandler(ctx context.Context, req *mcp.CallToolRequest, input Li
 
 	sessions := globalSessionManager.ListSessions(input.StatusFilter)
 
-	var sessionInfos []SessionInfo
+	sessionInfos := []SessionInfo{}
 	for _, session := range sessions {
 		// Create message preview (first 100 chars)
 		preview := session.Message

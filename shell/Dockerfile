@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     bash \
     wget \
-    git \
+    git jq \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
