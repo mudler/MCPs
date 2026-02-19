@@ -125,14 +125,11 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 func main() {
 	// Run initialization script if SHELL_INIT_SCRIPT is set
 	if initScript := os.Getenv("SHELL_INIT_SCRIPT"); initScript != "" {
-		log.Printf("Running initialization script: %s", initScript)
 		cmd := exec.CommandContext(context.Background(), "sh", "-c", initScript)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Fatalf("Initialization script failed: %v", err)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("Initialization script failed: %v\nOutput: %s", err, string(output))
 		}
-		log.Println("Initialization script completed successfully")
 	}
 
 	// Create MCP server for shell command execution
