@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     wget \
     git jq \
-    openssh-client \
+    openssh-client gnupg2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
