@@ -13,9 +13,7 @@ COPY shell/ ./shell/
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o shell-mcp-server ./shell/
 
-# Final stage - use Debian instead of Alpine for glibc compatibility
-FROM debian:bookworm-slim
-
+FROM ubuntu
 # Install required runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -27,13 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
-RUN (type -p wget >/dev/null || (apt-get update && apt-get install wget -y)) \
-    && mkdir -p -m 755 /etc/apt/keyrings \
-    && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    && cat $out | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && mkdir -p -m 755 /etc/apt/sources.list.d \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0 \
+    && apt-add-repository https://cli.github.com/packages \
     && apt-get update \
     && apt-get install gh -y \
     && rm -rf /var/lib/apt/lists/*
