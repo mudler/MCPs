@@ -1471,45 +1471,9 @@ func main() {
 
 Docker images are automatically built and pushed to GitHub Container Registry:
 
-- `ghcr.io/mudler/mcps/duckduckgo:latest` - Latest DuckDuckGo server
-- `ghcr.io/mudler/mcps/duckduckgo:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/duckduckgo:master` - Development versions
-- `ghcr.io/mudler/mcps/weather:latest` - Latest Weather server
-- `ghcr.io/mudler/mcps/weather:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/weather:master` - Development versions
-- `ghcr.io/mudler/mcps/wait:latest` - Latest Wait server
-- `ghcr.io/mudler/mcps/wait:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/wait:master` - Development versions
-- `ghcr.io/mudler/mcps/memory:latest` - Latest Memory server
-- `ghcr.io/mudler/mcps/memory:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/memory:master` - Development versions
-- `ghcr.io/mudler/mcps/shell:latest` - Latest Shell server
-- `ghcr.io/mudler/mcps/shell:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/shell:master` - Development versions
-- `ghcr.io/mudler/mcps/ssh:latest` - Latest SSH server
-- `ghcr.io/mudler/mcps/ssh:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/ssh:master` - Development versions
-- `ghcr.io/mudler/mcps/homeassistant:latest` - Latest Home Assistant server
-- `ghcr.io/mudler/mcps/homeassistant:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/homeassistant:master` - Development versions
-- `ghcr.io/mudler/mcps/scripts:latest` - Latest Script Runner server
-- `ghcr.io/mudler/mcps/scripts:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/scripts:master` - Development versions
-- `ghcr.io/mudler/mcps/localrecall:latest` - Latest LocalRecall server
-- `ghcr.io/mudler/mcps/localrecall:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/localrecall:master` - Development versions
-- `ghcr.io/mudler/mcps/todo:latest` - Latest TODO server
-- `ghcr.io/mudler/mcps/todo:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/todo:master` - Development versions
-- `ghcr.io/mudler/mcps/mailbox:latest` - Latest Mailbox server
-- `ghcr.io/mudler/mcps/mailbox:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/mailbox:master` - Development versions
-- `ghcr.io/mudler/mcps/opencode:latest` - Latest Opencode server
-- `ghcr.io/mudler/mcps/opencode:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/opencode:master` - Development versions
-- `ghcr.io/mudler/mcps/filesystem:latest` - Latest Filesystem server
-- `ghcr.io/mudler/mcps/filesystem:v1.0.0` - Tagged versions
-- `ghcr.io/mudler/mcps/filesystem:master` - Development versions
+- `ghcr.io/mudler/mcps/<component>:latest` - Latest component tagged version
+- `ghcr.io/mudler/mcps/<component>:v<version>` - Specific tagged versions
+- `ghcr.io/mudler/mcps/<component>:master` - Development versions
 
 ## Contributing
 
