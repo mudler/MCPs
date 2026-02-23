@@ -27,6 +27,9 @@ jobs:
           - mcp: wait
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: think
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: memory
             dockerfile: ./Dockerfile
             context: ./
