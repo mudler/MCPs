@@ -101,6 +101,56 @@ mcp:
     }
 ```
 
+
+### 🧠 Think Server
+
+A no-op tool that forces the model to think about a message. Useful for debugging or forcing explicit reasoning steps in the model.
+
+**Features:**
+- Simple message input that gets echoed back
+- Forces the model to explicitly process and think about the message
+- Input validation (non-empty message)
+- JSON schema validation for inputs/outputs
+
+**Tool:**
+- `think` - Think about a given message
+
+**Input Format:**
+```json
+{
+  "message": "What is the capital of France?"
+}
+```
+
+**Output Format:**
+```json
+{
+  "result": "Thinking about: What is the capital of France?"
+}
+```
+
+**Docker Image:**
+```bash
+docker run ghcr.io/mudler/mcps/think:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "think": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/think:master"
+          ]
+        }
+      }
+    }
+```
+
 ### ⏱️ Wait Server
 
 A simple wait/sleep server that allows AI models to autonomously wait for a specified duration. Useful for waiting for asynchronous operations to complete.
