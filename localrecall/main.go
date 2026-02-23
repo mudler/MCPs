@@ -21,6 +21,14 @@ var httpClient *http.Client
 var localRecallURL string
 var apiKey string
 var defaultCollectionName string
+var debugMode bool
+
+// debugLog prints debug messages only when DEBUG=1 is set
+func debugLog(format string, args ...interface{}) {
+	if debugMode {
+		log.Printf("[DEBUG] "+format, args...)
+	}
+}
 
 // LocalRecall API response structure
 type APIResponse struct {
@@ -601,6 +609,9 @@ func deleteEntryWithCollection(ctx context.Context, collectionName, entry string
 }
 
 func main() {
+	// Check for debug mode
+	debugMode = os.Getenv("DEBUG") == "1"
+
 	// Get configuration from environment variables
 	localRecallURL = os.Getenv("LOCALRECALL_URL")
 	if localRecallURL == "" {
@@ -621,13 +632,13 @@ func main() {
 
 	// Valid tool names
 	validTools := map[string]bool{
-		"search":           true,
+		"search":            true,
 		"create_collection": true,
-		"reset_collection": true,
-		"add_document":     true,
-		"list_collections": true,
-		"list_files":       true,
-		"delete_entry":     true,
+		"reset_collection":  true,
+		"add_document":      true,
+		"list_collections":  true,
+		"list_files":        true,
+		"delete_entry":      true,
 	}
 
 	if enabledToolsStr != "" {
@@ -641,7 +652,7 @@ func main() {
 			if validTools[tool] {
 				enabledTools[tool] = true
 			} else {
-				log.Printf("Warning: Unknown tool name '%s' will be ignored", tool)
+				debugLog("Warning: Unknown tool name '%s' will be ignored", tool)
 			}
 		}
 	} else {
@@ -665,13 +676,13 @@ func main() {
 				Name:        "search",
 				Description: desc,
 			}, SearchWithoutCollection)
-			log.Printf("Tool 'search' enabled (using default collection: %s)", defaultCollectionName)
+			debugLog("Tool 'search' enabled (using default collection: %s)", defaultCollectionName)
 		} else {
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        "search",
 				Description: "Search content in a LocalRecall collection",
 			}, Search)
-			log.Println("Tool 'search' enabled")
+			debugLog("Tool 'search' enabled")
 		}
 	}
 
@@ -680,7 +691,7 @@ func main() {
 			Name:        "create_collection",
 			Description: "Create a new collection in LocalRecall",
 		}, CreateCollection)
-		log.Println("Tool 'create_collection' enabled")
+		debugLog("Tool 'create_collection' enabled")
 	}
 
 	if enabledTools["reset_collection"] {
@@ -688,7 +699,7 @@ func main() {
 			Name:        "reset_collection",
 			Description: "Reset (clear) a collection in LocalRecall",
 		}, ResetCollection)
-		log.Println("Tool 'reset_collection' enabled")
+		debugLog("Tool 'reset_collection' enabled")
 	}
 
 	if enabledTools["add_document"] {
@@ -698,13 +709,13 @@ func main() {
 				Name:        "add_document",
 				Description: desc,
 			}, AddDocumentWithoutCollection)
-			log.Printf("Tool 'add_document' enabled (using default collection: %s)", defaultCollectionName)
+			debugLog("Tool 'add_document' enabled (using default collection: %s)", defaultCollectionName)
 		} else {
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        "add_document",
 				Description: "Add a document to a LocalRecall collection",
 			}, AddDocument)
-			log.Println("Tool 'add_document' enabled")
+			debugLog("Tool 'add_document' enabled")
 		}
 	}
 
@@ -713,7 +724,7 @@ func main() {
 			Name:        "list_collections",
 			Description: "List all collections in LocalRecall",
 		}, ListCollections)
-		log.Println("Tool 'list_collections' enabled")
+		debugLog("Tool 'list_collections' enabled")
 	}
 
 	if enabledTools["list_files"] {
@@ -723,13 +734,13 @@ func main() {
 				Name:        "list_files",
 				Description: desc,
 			}, ListFilesWithoutCollection)
-			log.Printf("Tool 'list_files' enabled (using default collection: %s)", defaultCollectionName)
+			debugLog("Tool 'list_files' enabled (using default collection: %s)", defaultCollectionName)
 		} else {
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        "list_files",
 				Description: "List files in a LocalRecall collection",
 			}, ListFiles)
-			log.Println("Tool 'list_files' enabled")
+			debugLog("Tool 'list_files' enabled")
 		}
 	}
 
@@ -740,21 +751,21 @@ func main() {
 				Name:        "delete_entry",
 				Description: desc,
 			}, DeleteEntryWithoutCollection)
-			log.Printf("Tool 'delete_entry' enabled (using default collection: %s)", defaultCollectionName)
+			debugLog("Tool 'delete_entry' enabled (using default collection: %s)", defaultCollectionName)
 		} else {
 			mcp.AddTool(server, &mcp.Tool{
 				Name:        "delete_entry",
 				Description: "Delete an entry from a LocalRecall collection",
 			}, DeleteEntry)
-			log.Println("Tool 'delete_entry' enabled")
+			debugLog("Tool 'delete_entry' enabled")
 		}
 	}
 
-	log.Printf("LocalRecall MCP server initialized. URL: %s", localRecallURL)
+	debugLog("LocalRecall MCP server initialized. URL: %s", localRecallURL)
 	if len(enabledTools) == 0 {
-		log.Println("Warning: No tools enabled!")
+		debugLog("Warning: No tools enabled!")
 	} else {
-		log.Printf("Enabled %d tool(s)", len(enabledTools))
+		debugLog("Enabled %d tool(s)", len(enabledTools))
 	}
 
 	// Run the server
