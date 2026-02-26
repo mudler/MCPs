@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,20 @@ func getWorkingDirectory() string {
 	return os.Getenv("SHELL_WORKING_DIR")
 }
 
+// getTimeout returns the default timeout from SHELL_TIMEOUT env var,
+// or 30 seconds if not set or invalid
+func getTimeout() int {
+	timeoutStr := os.Getenv("SHELL_TIMEOUT")
+	if timeoutStr == "" {
+		return 30
+	}
+	timeout, err := strconv.Atoi(timeoutStr)
+	if err != nil || timeout <= 0 {
+		return 30
+	}
+	return timeout
+}
+
 // ExecuteCommand executes a shell script and returns the output
 func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input ExecuteCommandInput) (
 	*mcp.CallToolResult,
@@ -52,7 +67,7 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 	// Set default timeout if not provided
 	timeout := input.Timeout
 	if timeout <= 0 {
-		timeout = 30
+		timeout = getTimeout()
 	}
 
 	// Create a context with timeout
@@ -146,7 +161,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server
