@@ -44,6 +44,44 @@ mcp:
     }
 ```
 
+### 🤖 Codemogger Server
+
+A codemogger MCP server that provides code analysis and indexing capabilities.
+
+**Features:**
+- Code search functionality
+- Code indexing capabilities
+- Reindex functionality
+- JSON schema validation for inputs/outputs
+
+**Tools:**
+- `codemogger_search` - Search code using codemogger
+- `codemogger_index` - Index code using codemogger
+- `codemogger_reindex` - Reindex code using codemogger
+
+**Docker Image:**
+```bash
+docker run ghcr.io/mudler/mcps/codemogger:latest
+```
+
+**LocalAI configuration ( to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "codemogger": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/codemogger:master"
+          ]
+        }
+      }
+    }
+```
+
+
 ### 🌤️ Weather Server
 
 A weather information server that provides current weather and forecast data for cities worldwide.
