@@ -63,6 +63,9 @@ jobs:
           - mcp: opencode
             dockerfile: ./opencode/Dockerfile
             context: ./
+          - mcp: codemogger
+            dockerfile: ./codemogger/Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read
