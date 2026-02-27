@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -119,7 +120,7 @@ func (s *TaskStore) SetResult(id, result string) error {
 // ChatInput represents the input for sub_agent_chat tool
 type ChatInput struct {
 	Message   string `json:"message" jsonschema:"the message to send to the AI model"`
-	Background *bool  `json:"background,omitempty" jsonschema:"whether to process in background (default: false)"`
+	Background *bool  `json:"background,omitempty" jsonschema:"whether to process in background (defaults to SUB_AGENT_BACKGROUND_DEFAULT env var, or false if not set)"`
 }
 
 // ChatOutput represents the output of sub_agent_chat tool
@@ -152,11 +153,12 @@ type GetResultOutput struct {
 }
 
 var (
-	openaiBaseURL   string
-	openaiModel     string
-	openaiAPIKey    string
-	subAgentTTL     time.Duration
-	taskStore       *TaskStore
+	openaiBaseURL        string
+	openaiModel          string
+	openaiAPIKey         string
+	subAgentTTL          time.Duration
+	taskStore            *TaskStore
+	backgroundDefault    bool
 )
 
 func initConfig() {
@@ -176,6 +178,14 @@ func initConfig() {
 	}
 	subAgentTTL = time.Duration(ttlHours) * time.Hour
 	taskStore = NewTaskStore(subAgentTTL)
+
+	// Read background default from environment variable
+	// SUB_AGENT_BACKGROUND_DEFAULT can be "true" or "false"
+	// If not set or invalid, defaults to false
+	backgroundDefault = false
+	if bgEnv := os.Getenv("SUB_AGENT_BACKGROUND_DEFAULT"); bgEnv != "" {
+		backgroundDefault, _ = strconv.ParseBool(bgEnv)
+	}
 }
 
 func callOpenAI(ctx context.Context, message string) (string, error) {
@@ -194,7 +204,8 @@ func SubAgentChat(ctx context.Context, req *mcp.CallToolRequest, input ChatInput
 		return nil, ChatOutput{}, fmt.Errorf("message cannot be empty")
 	}
 
-	background := false
+	// Use environment variable default, but allow request-level override
+	background := backgroundDefault
 	if input.Background != nil {
 		background = *input.Background
 	}
