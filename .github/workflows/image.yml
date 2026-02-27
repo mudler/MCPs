@@ -36,6 +36,9 @@ jobs:
           - mcp: shell
             dockerfile: ./shell/Dockerfile
             context: ./
+          - mcp: sub-agent
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: ssh
             dockerfile: ./Dockerfile
             context: ./

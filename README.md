@@ -582,6 +582,54 @@ mcp:
 
 ### 🔐 SSH Server
 
+### 🤖 Sub-Agent Server
+
+A Model Context Protocol (MCP) server that provides chat completion capabilities with background processing support.
+
+**Features:**
+- **Chat Completion Tool**: Send messages to OpenAI API with synchronous or asynchronous processing
+- **Background Processing**: Execute chat completions in the background and retrieve results later
+- **Task Management**: List active background tasks and get their results
+- **TTL-based Cleanup**: Automatic cleanup of expired tasks based on configurable TTL
+
+**Tools:**
+- `sub_agent_chat` - Send a chat completion message to OpenAI
+- `sub_agent_list` - List all active background sub-agent calls
+- `sub_agent_get_result` - Get the result of a background task
+
+**Configuration:**
+- `OPENAI_BASE_URL` - Base URL for OpenAI API (default: `https://api.openai.com/v1`)
+- `OPENAI_MODEL` - Model to use for completions (default: `gpt-4o-mini`)
+- `OPENAI_API_KEY` - API key for OpenAI authentication (required)
+- `SUB_AGENT_TTL` - TTL in hours for background task results (default: `4`)
+
+**Docker Image:**
+```bash
+docker run -e OPENAI_API_KEY=your-api-key ghcr.io/mudler/mcps/sub-agent:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "sub-agent": {
+          "command": "docker",
+          "env": {
+            "OPENAI_API_KEY": "your-api-key",
+            "OPENAI_MODEL": "gpt-4o-mini",
+            "SUB_AGENT_TTL": "4"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/sub-agent:master"
+          ]
+        }
+      }
+    }
+```
+
 An SSH server that allows AI models to connect to remote SSH hosts and execute shell scripts.
 
 **Features:**
