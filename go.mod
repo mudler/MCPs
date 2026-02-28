@@ -14,8 +14,12 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/tmc/langchaingo v0.1.13
+	github.com/mudler/MCPs/sub-agent v0.0.0
 	golang.org/x/crypto v0.47.0
 )
+
+// Replace the sub-agent module with the local directory
+replace github.com/mudler/MCPs/sub-agent => ./sub-agent
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
