@@ -1581,3 +1581,59 @@ This project is licensed under the terms specified in the [LICENSE](LICENSE) fil
 This project implements servers for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), a standard for connecting AI models to external data sources and tools.
 
 For more information about MCP, visit the [official documentation](https://modelcontextprotocol.io/docs).
+
+### 🤖 Sub-Agent Server
+
+A Model Context Protocol (MCP) server that allows sending chat completion messages to any OpenAI-compatible endpoint, with support for background job tracking using goroutines and in-memory storage with TTL.
+
+**Features:**
+- Send chat completion requests to OpenAI-compatible endpoints
+- Background job tracking with asynchronous execution
+- In-memory storage with configurable TTL for results
+- Three MCP tools for managing sub-agent calls
+
+**Tools:**
+- `sub_agent_send` - Send a chat completion message to an OpenAI-compatible endpoint
+- `sub_agent_list` - List all active sub-agent calls with their status
+- `sub_agent_get_result` - Get the result of a completed sub-agent call by task ID
+
+**Configuration:**
+- `OPENAI_BASE_URL` - The base URL for the OpenAI API endpoint (default: `https://api.openai.com/v1`)
+- `OPENAI_MODEL` - The model to use for chat completions (default: `gpt-3.5-turbo`)
+- `OPENAI_API_KEY` - The API key for authentication (required)
+- `TTL` - Time-to-live for stored results in Go duration format (default: `1h`)
+
+**Docker Image:**
+```bash
+docker run -e OPENAI_API_KEY=your-key ghcr.io/mudler/mcps/sub-agent:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "sub-agent": {
+          "command": "docker",
+          "env": {
+            "OPENAI_BASE_URL": "https://your-openai-compatible-endpoint/v1",
+            "OPENAI_MODEL": "your-model",
+            "OPENAI_API_KEY": "your-api-key",
+            "TTL": "2h"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "-e", "OPENAI_BASE_URL",
+            "-e", "OPENAI_MODEL",
+            "-e", "OPENAI_API_KEY",
+            "-e", "TTL",
+            "ghcr.io/mudler/mcps/sub-agent:master"
+          ]
+        }
+      }
+    }
+```
+
+For more details, see the [sub-agent README](./sub-agent/README.md).
+
