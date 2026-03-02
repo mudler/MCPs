@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,6 +29,24 @@ type ExecuteCommandOutput struct {
 	ExitCode int    `json:"exit_code" jsonschema:"exit code of the script (0 means success)"`
 	Success  bool   `json:"success" jsonschema:"whether the script executed successfully"`
 	Error    string `json:"error,omitempty" jsonschema:"error message if execution failed"`
+}
+
+// Interactive flags that commonly cause commands to hang
+var interactiveFlags = []string{
+	"-i", "--interactive", "--tty", "-t",
+	"vim", "vi", "nano", "emacs", "less", "more", "top", "htop",
+	"ftp", "sftp", "ssh", "ping", "tail -f", "tail -F",
+}
+
+// isInteractiveCommand checks if the script contains interactive commands
+func isInteractiveCommand(script string) bool {
+	scriptLower := strings.ToLower(script)
+	for _, flag := range interactiveFlags {
+		if strings.Contains(scriptLower, flag) {
+			return true
+		}
+	}
+	return false
 }
 
 // getShellCommand returns the shell command to use, defaulting to "sh" if not set
@@ -70,11 +90,17 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		timeout = getTimeout()
 	}
 
+	// Warn about interactive commands (but still attempt execution with proper safeguards)
+	warningMsg := ""
+	if isInteractiveCommand(input.Script) {
+		warningMsg = "Warning: Command appears to be interactive and may hang. "
+	}
+
 	// Create a context with timeout
 	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	// Get shell command from environment variable (default: "sh")
+	// Get shell command from environment variable (default: "sh -c")
 	shellCmd := getShellCommand()
 
 	// Parse shell command - support both single command and command with args
@@ -97,10 +123,23 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		cmd.Dir = workDir
 	}
 
+	// CRITICAL FIX: Set process group to enable killing entire process tree
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group
+	}
+
 	// Create buffers to capture stdout and stderr separately
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
+
+	// Set environment variables to force non-interactive mode
+	env := os.Environ()
+	env = append(env, "CI=true")           // Common flag for CI/CD to disable interactive mode
+	env = append(env, "TERM=dumb")          // Force dumb terminal
+	env = append(env, "INPUT=/dev/null")    // Redirect stdin from /dev/null
+	env = append(env, "NONINTERACTIVE=1")   // Common flag for non-interactive mode
+	cmd.Env = env
 
 	// Execute command
 	err := cmd.Run()
@@ -119,10 +158,21 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		} else {
 			// Context timeout or other error
 			if cmdCtx.Err() == context.DeadlineExceeded {
-				errorMsg = "Command timed out"
+				errorMsg = "Command timed out after " + strconv.Itoa(timeout) + " seconds"
+				
+				// CRITICAL: Kill the entire process group on timeout
+				if cmd.Process != nil && cmd.Process.Pid > 0 {
+					// Kill the process group (negative PID)
+					syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				}
 			}
 			exitCode = -1
 		}
+	}
+
+	// Add warning to stderr if interactive command detected
+	if warningMsg != "" {
+		stderrBuf.WriteString("\n" + warningMsg)
 	}
 
 	output := ExecuteCommandOutput{
@@ -161,7 +211,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable. NOTE: Interactive commands are detected and force non-interactive mode with CI=true, TERM=dumb, and stdin redirected from /dev/null. Process group management ensures proper cleanup on timeout.",
 	}, ExecuteCommand)
 
 	// Run the server
