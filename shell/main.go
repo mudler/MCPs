@@ -210,7 +210,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable. NOTE: Interactive commands are detected and force non-interactive mode with CI=true, TERM=dumb, and stdin redirected from /dev/null. Process group management ensures proper cleanup on timeout.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server
