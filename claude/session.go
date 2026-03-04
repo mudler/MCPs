@@ -105,6 +105,11 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 		args = append(args, "--tools", tools)
 	}
 
+	// Skip permissions if specified (allows all tools without prompting)
+	if os.Getenv("CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS") == "true" {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
 	// Create process with go-processmanager
 	process := processmanager.New(
 		processmanager.WithName(claudeBinary),

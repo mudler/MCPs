@@ -92,6 +92,7 @@ Use the `list_sessions` tool to see all sessions, optionally filtered by status.
 - `CLAUDE_VARIANT`: Model variant
 - `CLAUDE_ALLOWED_TOOLS`: Tools allowed without prompting (e.g., `"Bash,Read,Edit"`)
 - `CLAUDE_TOOLS`: Restrict which tools Claude can use (e.g., `"Bash,Read,Edit"`)
+- `CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS`: Set to `true` to pass `--dangerously-skip-permissions` to Claude, allowing all tools without any permission prompts
 
 ### Tool Naming (Optional)
 
