@@ -82,11 +82,6 @@ func main() {
 		if err := os.WriteFile(credPath, []byte(creds), 0600); err != nil {
 			log.Fatalf("Failed to write credentials: %v", err)
 		}
-		log.Printf("Claude credentials written to %s", credPath)
-	} else if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		log.Printf("Using ANTHROPIC_API_KEY for authentication")
-	} else {
-		log.Printf("Warning: No authentication configured. Set CLAUDE_CREDENTIALS or ANTHROPIC_API_KEY.")
 	}
 
 	globalSessionManager = &SessionManager{
