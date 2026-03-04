@@ -41,6 +41,8 @@ ENV CLAUDE_SHARE=false
 # ENV CLAUDE_PORT=0
 # ENV CLAUDE_ALLOWED_TOOLS=
 # ENV CLAUDE_TOOLS=
+# ENV CLAUDE_CREDENTIALS=  # JSON content of ~/.claude/.credentials.json for OAuth auth
+# ENV ANTHROPIC_API_KEY=   # Anthropic API key (alternative to OAuth credentials)
 
 # Run the MCP server
 ENTRYPOINT ["claude-mcp-server"]

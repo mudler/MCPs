@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -65,6 +66,27 @@ func main() {
 	// Ensure session directory exists
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		log.Fatalf("Failed to create session directory: %v", err)
+	}
+
+	// Setup authentication
+	if creds := os.Getenv("CLAUDE_CREDENTIALS"); creds != "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatalf("Failed to get home directory: %v", err)
+		}
+		claudeDir := filepath.Join(homeDir, ".claude")
+		if err := os.MkdirAll(claudeDir, 0700); err != nil {
+			log.Fatalf("Failed to create .claude directory: %v", err)
+		}
+		credPath := filepath.Join(claudeDir, ".credentials.json")
+		if err := os.WriteFile(credPath, []byte(creds), 0600); err != nil {
+			log.Fatalf("Failed to write credentials: %v", err)
+		}
+		log.Printf("Claude credentials written to %s", credPath)
+	} else if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		log.Printf("Using ANTHROPIC_API_KEY for authentication")
+	} else {
+		log.Printf("Warning: No authentication configured. Set CLAUDE_CREDENTIALS or ANTHROPIC_API_KEY.")
 	}
 
 	globalSessionManager = &SessionManager{

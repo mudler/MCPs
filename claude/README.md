@@ -75,6 +75,11 @@ Use the `list_sessions` tool to see all sessions, optionally filtered by status.
 - `CLAUDE_LOG_RETENTION_HOURS`: Hours to keep logs before cleanup (default: `24`)
 - `CLAUDE_WORK_DIR`: Working directory for Claude processes (default: `/root`)
 
+### Authentication
+
+- `CLAUDE_CREDENTIALS`: JSON content of `~/.claude/.credentials.json`. On startup, the server writes this to disk so Claude CLI picks up OAuth tokens. Useful for containers and remote environments.
+- `ANTHROPIC_API_KEY`: Anthropic API key, passed through to Claude subprocesses automatically. Alternative to OAuth credentials.
+
 ### Claude Code Invocation
 
 - `CLAUDE_BINARY`: Path to Claude binary (default: `claude`)
