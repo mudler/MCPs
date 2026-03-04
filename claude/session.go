@@ -110,6 +110,13 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 		args = append(args, "--dangerously-skip-permissions")
 	}
 
+	// Open /dev/null for child stdin so it doesn't inherit (and steal from)
+	// the MCP server's stdin, which would cause EOF errors on the JSON-RPC stream.
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open %s: %w", os.DevNull, err)
+	}
+
 	// Create process with go-processmanager
 	process := processmanager.New(
 		processmanager.WithName(claudeBinary),
@@ -117,6 +124,7 @@ func (sm *SessionManager) CreateSession(message, title, sessionID string, files 
 		processmanager.WithStateDir(sessionDir),
 		processmanager.WithWorkDir(sm.workDir),
 		processmanager.WithEnvironment(os.Environ()...),
+		processmanager.WithSTDIN(devNull),
 	)
 
 	session := &Session{
