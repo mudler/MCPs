@@ -70,7 +70,7 @@ jobs:
             dockerfile: ./claude/Dockerfile
             context: ./
           - mcp: sub-agent
-            dockerfile: ./sub-agent/Dockerfile
+            dockerfile: ./Dockerfile
             context: ./
     permissions:
       packages: write
