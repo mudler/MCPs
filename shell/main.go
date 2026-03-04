@@ -30,24 +30,6 @@ type ExecuteCommandOutput struct {
 	Error    string `json:"error,omitempty" jsonschema:"error message if execution failed"`
 }
 
-// Interactive flags that commonly cause commands to hang
-var interactiveFlags = []string{
-	"-i", "--interactive", "--tty", "-t",
-	"vim", "vi", "nano", "emacs", "less", "more", "top", "htop",
-	"ftp", "sftp", "ssh", "ping", "tail -f", "tail -F",
-}
-
-// isInteractiveCommand checks if the script contains interactive commands
-func isInteractiveCommand(script string) bool {
-	scriptLower := strings.ToLower(script)
-	for _, flag := range interactiveFlags {
-		if strings.Contains(scriptLower, flag) {
-			return true
-		}
-	}
-	return false
-}
-
 // getShellCommand returns the shell command to use, defaulting to "sh" if not set
 func getShellCommand() string {
 	shellCmd := os.Getenv("SHELL_CMD")
@@ -87,12 +69,6 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 	timeout := input.Timeout
 	if timeout <= 0 {
 		timeout = getTimeout()
-	}
-
-	// Warn about interactive commands (but still attempt execution with proper safeguards)
-	warningMsg := ""
-	if isInteractiveCommand(input.Script) {
-		warningMsg = "Warning: Command appears to be interactive and may hang. "
 	}
 
 	// Create a context with timeout
@@ -167,11 +143,6 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 			}
 			exitCode = -1
 		}
-	}
-
-	// Add warning to stderr if interactive command detected
-	if warningMsg != "" {
-		stderrBuf.WriteString("\n" + warningMsg)
 	}
 
 	output := ExecuteCommandOutput{
