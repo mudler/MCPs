@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -98,12 +99,19 @@ func (s *SubAgentStore) List() []*SubAgentResult {
 }
 
 var (
-	store      *SubAgentStore
-	openaiClient *openai.Client
-	openaiModel  string
+	store           *SubAgentStore
+	openaiClient    *openai.Client
+	openaiModel     string
+	backgroundDefault bool
 )
 
 func init() {
+	// SUB_AGENT_BACKGROUND_DEFAULT can be "true" or "false"
+	backgroundDefault = false
+	if bgEnv := os.Getenv("SUB_AGENT_BACKGROUND_DEFAULT"); bgEnv != "" {
+		backgroundDefault, _ = strconv.ParseBool(bgEnv)
+	}
+
 	// Initialize TTL (default 1 hour)
 	ttl := 1 * time.Hour
 	if ttlStr := os.Getenv("TTL"); ttlStr != "" {
@@ -134,7 +142,7 @@ func init() {
 // SendInput represents the input for sub_agent_send
 type SendInput struct {
 	Message    string `json:"message" jsonschema:"the message to send to the OpenAI endpoint"`
-	Background bool   `json:"background,omitempty" jsonschema:"whether to run the request in the background (default: false)"`
+	Background bool   `json:"background,omitempty" jsonschema:"whether to process in background (defaults to SUB_AGENT_BACKGROUND_DEFAULT env var, or false if not set)"`
 	Model      string `json:"model,omitempty" jsonschema:"override the default model for this request"`
 }
 
@@ -195,7 +203,13 @@ func SendChatCompletion(ctx context.Context, req *mcp.CallToolRequest, input Sen
 		result = resp.Choices[0].Message.Content
 	}
 
-	if input.Background {
+	// Use backgroundDefault as the default, but allow request-level override
+	background := input.Background
+	if !input.Background && backgroundDefault {
+		// If request doesn't explicitly set background, use the default
+		background = backgroundDefault
+	}
+	if background {
 		taskID := uuid.New().String()
 		subResult := &SubAgentResult{
 			ID:        taskID,
