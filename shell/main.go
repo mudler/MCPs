@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,7 +75,7 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	// Get shell command from environment variable (default: "sh")
+	// Get shell command from environment variable (default: "sh -c")
 	shellCmd := getShellCommand()
 
 	// Parse shell command - support both single command and command with args
@@ -97,10 +98,23 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		cmd.Dir = workDir
 	}
 
+	// CRITICAL FIX: Set process group to enable killing entire process tree
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group
+	}
+
 	// Create buffers to capture stdout and stderr separately
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
+
+	// Set environment variables to force non-interactive mode
+	env := os.Environ()
+	env = append(env, "CI=true")           // Common flag for CI/CD to disable interactive mode
+	env = append(env, "TERM=dumb")          // Force dumb terminal
+	env = append(env, "INPUT=/dev/null")    // Redirect stdin from /dev/null
+	env = append(env, "NONINTERACTIVE=1")   // Common flag for non-interactive mode
+	cmd.Env = env
 
 	// Execute command
 	err := cmd.Run()
@@ -119,7 +133,13 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		} else {
 			// Context timeout or other error
 			if cmdCtx.Err() == context.DeadlineExceeded {
-				errorMsg = "Command timed out"
+				errorMsg = "Command timed out after " + strconv.Itoa(timeout) + " seconds"
+				
+				// CRITICAL: Kill the entire process group on timeout
+				if cmd.Process != nil && cmd.Process.Pid > 0 {
+					// Kill the process group (negative PID)
+					syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				}
 			}
 			exitCode = -1
 		}

@@ -1,0 +1,158 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	processmanager "github.com/mudler/go-processmanager"
+)
+
+// Session represents an active Claude session
+type Session struct {
+	ID        string                  `json:"id"`
+	Status    string                  `json:"status"`
+	PID       string                  `json:"pid"`
+	Message   string                  `json:"message"`
+	Model     string                  `json:"model"`
+	CreatedAt time.Time               `json:"created_at"`
+	StartedAt time.Time               `json:"started_at,omitempty"`
+	StoppedAt time.Time               `json:"stopped_at,omitempty"`
+	ExitCode  string                  `json:"exit_code"`
+	Process   *processmanager.Process `json:"-"`
+	StateDir  string                  `json:"state_dir"`
+}
+
+// SessionManager manages all Claude sessions
+type SessionManager struct {
+	sessions            map[string]*Session
+	mutex               sync.RWMutex
+	sessionDir, workDir string
+	maxSessions         int
+}
+
+// Global session manager
+var globalSessionManager *SessionManager
+
+// getEnv gets environment variable with default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvInt gets environment variable as int with default value
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intVal, err := strconv.Atoi(value); err == nil {
+			return intVal
+		}
+	}
+	return defaultValue
+}
+
+func main() {
+	// Initialize session manager
+	sessionDir := getEnv("CLAUDE_SESSION_DIR", "/tmp/claude-sessions")
+	maxSessions := getEnvInt("CLAUDE_MAX_SESSIONS", 10)
+	workDir := getEnv("CLAUDE_WORK_DIR", "/root")
+
+	// Ensure session directory exists
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		log.Fatalf("Failed to create session directory: %v", err)
+	}
+
+	// Setup authentication
+	if creds := os.Getenv("CLAUDE_CREDENTIALS"); creds != "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatalf("Failed to get home directory: %v", err)
+		}
+		claudeDir := filepath.Join(homeDir, ".claude")
+		if err := os.MkdirAll(claudeDir, 0700); err != nil {
+			log.Fatalf("Failed to create .claude directory: %v", err)
+		}
+		credPath := filepath.Join(claudeDir, ".credentials.json")
+		if err := os.WriteFile(credPath, []byte(creds), 0600); err != nil {
+			log.Fatalf("Failed to write credentials: %v", err)
+		}
+	}
+
+	globalSessionManager = &SessionManager{
+		sessions:    make(map[string]*Session),
+		sessionDir:  sessionDir,
+		workDir:     workDir,
+		maxSessions: maxSessions,
+	}
+
+	// Create MCP server
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "claude",
+		Version: "v1.0.0",
+	}, nil)
+
+	startSessionName := os.Getenv("CLAUDE_TOOL_START_SESSION_NAME")
+	if startSessionName == "" {
+		startSessionName = "start_session"
+	}
+
+	getSessionStatusName := os.Getenv("CLAUDE_TOOL_GET_SESSION_STATUS_NAME")
+	if getSessionStatusName == "" {
+		getSessionStatusName = "get_session_status"
+	}
+
+	getSessionLogsName := os.Getenv("CLAUDE_TOOL_GET_SESSION_LOGS_NAME")
+	if getSessionLogsName == "" {
+		getSessionLogsName = "get_session_logs"
+	}
+
+	stopSessionName := os.Getenv("CLAUDE_TOOL_STOP_SESSION_NAME")
+	if stopSessionName == "" {
+		stopSessionName = "stop_session"
+	}
+
+	listSessionsName := os.Getenv("CLAUDE_TOOL_LIST_SESSIONS_NAME")
+	if listSessionsName == "" {
+		listSessionsName = "list_sessions"
+	}
+
+	// Register tools
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        startSessionName,
+		Description: "Start a new Claude session with a prompt. Returns a session ID that can be used to check status and retrieve logs.",
+	}, StartSessionHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        getSessionStatusName,
+		Description: "Get the status of a Claude session by ID. Returns running, completed, failed, or not_found.",
+	}, GetSessionStatusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        getSessionLogsName,
+		Description: "Get the stdout and stderr logs from a Claude session. Optionally specify the number of lines to retrieve (default 100).",
+	}, GetSessionLogsHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        stopSessionName,
+		Description: "Stop a running Claude session by ID. Optionally force kill the process.",
+	}, StopSessionHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        listSessionsName,
+		Description: "List all Claude sessions. Optionally filter by status: running, completed, failed, or all.",
+	}, ListSessionsHandler)
+
+	// Run server
+	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+		log.Fatal(err)
+	}
+
+	// Cleanup all sessions on shutdown
+	globalSessionManager.StopAllSessions()
+}

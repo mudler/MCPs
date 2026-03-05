@@ -66,6 +66,12 @@ jobs:
           - mcp: codemogger
             dockerfile: ./codemogger/Dockerfile
             context: ./
+          - mcp: claude
+            dockerfile: ./claude/Dockerfile
+            context: ./
+          - mcp: sub-agent
+            dockerfile: ./Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read

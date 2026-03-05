@@ -1356,6 +1356,124 @@ mcp:
     }
 ```
 
+### 🤖 Claude Server
+
+An MCP server for controlling Claude Code CLI sessions asynchronously. Start sessions, monitor progress, retrieve logs, and manage multiple concurrent Claude Code processes. It follows the same pattern as the opencode MCP server but is specifically designed for Claude Code.
+
+**Features:**
+- Background task delegation to Claude Code
+- Async session management with unique session IDs
+- Start Claude Code sessions with full command-line option support
+- Monitor session status (starting, running, completed, failed, stopped)
+- Retrieve stdout/stderr logs from sessions
+- Stop running sessions gracefully
+- List all sessions with filtering by status
+- Tool restrictions via `--allowedTools` and `--tools` flags
+- Environment passthrough to Claude subprocesses
+- Configurable concurrent session limits
+- Automatic log cleanup based on retention policy
+
+**Tools:**
+- `start_session` - Start a new Claude session with a prompt and options
+- `get_session_status` - Get the current status of a session by ID
+- `get_session_logs` - Retrieve stdout and stderr logs from a session
+- `stop_session` - Stop a running session
+- `list_sessions` - List all sessions with optional status filtering
+
+**Configuration:**
+- `CLAUDE_SESSION_DIR` - Directory for session state and logs (default: `/tmp/claude-sessions`)
+- `CLAUDE_BINARY` - Path to Claude binary (default: `claude`)
+- `CLAUDE_MAX_SESSIONS` - Maximum number of concurrent sessions (default: `10`)
+- `CLAUDE_LOG_RETENTION_HOURS` - Hours to retain session logs before cleanup (default: `24`)
+- `CLAUDE_WORK_DIR` - Working directory for Claude processes (default: `/root`)
+- `CLAUDE_MODEL` - Default model to use (e.g., `sonnet`, `opus`)
+- `CLAUDE_AGENT` - Specify an agent for sessions
+- `CLAUDE_FORMAT` - Output format (default: `json`)
+- `CLAUDE_SHARE` - Whether to share sessions (`true`/`false`)
+- `CLAUDE_ATTACH` - Files to attach to sessions
+- `CLAUDE_PORT` - Port for remote control
+- `CLAUDE_VARIANT` - Model variant
+- `CLAUDE_ALLOWED_TOOLS` - Tools allowed without prompting (e.g., `"Bash,Read,Edit"`)
+- `CLAUDE_TOOLS` - Restrict which tools Claude can use (e.g., `"Bash,Read,Edit"`)
+- `CLAUDE_TOOL_START_SESSION_NAME` - Override the start_session tool name
+- `CLAUDE_TOOL_GET_SESSION_STATUS_NAME` - Override the get_session_status tool name
+- `CLAUDE_TOOL_GET_SESSION_LOGS_NAME` - Override the get_session_logs tool name
+- `CLAUDE_TOOL_STOP_SESSION_NAME` - Override the stop_session tool name
+- `CLAUDE_TOOL_LIST_SESSIONS_NAME` - Override the list_sessions tool name
+
+**Start Session Example:**
+```json
+{
+  "message": "Find and fix the bug in auth.py",
+  "allowed_tools": "Bash,Read,Edit",
+  "title": "Bug Fix Task"
+}
+```
+
+**Start Session Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "starting",
+  "message": "Session started successfully"
+}
+```
+
+**Get Session Status Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "pid": "12345",
+  "exit_code": "0",
+  "created_at": "2025-01-15T10:30:00Z",
+  "started_at": "2025-01-15T10:30:01Z",
+  "stopped_at": "2025-01-15T10:30:15Z",
+  "duration": "14s"
+}
+```
+
+**Get Session Logs Output:**
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "stdout": "Working on the bug fix...",
+  "stderr": "",
+  "line_count": 50
+}
+```
+
+**Adding the Server:**
+```bash
+claude mcp add claude-mcp -- npx -y mudler/MCPs/claude
+```
+
+**Docker Image:**
+```bash
+docker run -e CLAUDE_MAX_SESSIONS=5 -e CLAUDE_LOG_RETENTION_HOURS=48 ghcr.io/mudler/mcps/claude:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "claude": {
+          "command": "docker",
+          "env": {
+            "CLAUDE_MAX_SESSIONS": "5",
+            "CLAUDE_LOG_RETENTION_HOURS": "48"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "ghcr.io/mudler/mcps/claude:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🚀 Opencode Server
 
 An MCP server for controlling opencode AI sessions asynchronously. Start sessions, monitor progress, retrieve logs, and manage multiple concurrent opencode processes.
@@ -1510,6 +1628,7 @@ make MCP_SERVER=localrecall build
 make MCP_SERVER=todo build
 make MCP_SERVER=mailbox build
 make MCP_SERVER=filesystem build
+make MCP_SERVER=claude build
 
 # Run tests and checks
 make ci-local
@@ -1581,3 +1700,59 @@ This project is licensed under the terms specified in the [LICENSE](LICENSE) fil
 This project implements servers for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), a standard for connecting AI models to external data sources and tools.
 
 For more information about MCP, visit the [official documentation](https://modelcontextprotocol.io/docs).
+
+### 🤖 Sub-Agent Server
+
+A Model Context Protocol (MCP) server that allows sending chat completion messages to any OpenAI-compatible endpoint, with support for background job tracking using goroutines and in-memory storage with TTL.
+
+**Features:**
+- Send chat completion requests to OpenAI-compatible endpoints
+- Background job tracking with asynchronous execution
+- In-memory storage with configurable TTL for results
+- Three MCP tools for managing sub-agent calls
+
+**Tools:**
+- `sub_agent_send` - Send a chat completion message to an OpenAI-compatible endpoint
+- `sub_agent_list` - List all active sub-agent calls with their status
+- `sub_agent_get_result` - Get the result of a completed sub-agent call by task ID
+
+**Configuration:**
+- `OPENAI_BASE_URL` - The base URL for the OpenAI API endpoint (default: `https://api.openai.com/v1`)
+- `OPENAI_MODEL` - The model to use for chat completions (default: `gpt-3.5-turbo`)
+- `OPENAI_API_KEY` - The API key for authentication (required)
+- `TTL` - Time-to-live for stored results in Go duration format (default: `1h`)
+
+**Docker Image:**
+```bash
+docker run -e OPENAI_API_KEY=your-key ghcr.io/mudler/mcps/sub-agent:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "sub-agent": {
+          "command": "docker",
+          "env": {
+            "OPENAI_BASE_URL": "https://your-openai-compatible-endpoint/v1",
+            "OPENAI_MODEL": "your-model",
+            "OPENAI_API_KEY": "your-api-key",
+            "TTL": "2h"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "-e", "OPENAI_BASE_URL",
+            "-e", "OPENAI_MODEL",
+            "-e", "OPENAI_API_KEY",
+            "-e", "TTL",
+            "ghcr.io/mudler/mcps/sub-agent:master"
+          ]
+        }
+      }
+    }
+```
+
+For more details, see the [sub-agent README](./sub-agent/README.md).
+
