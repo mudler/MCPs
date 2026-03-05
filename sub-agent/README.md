@@ -1,145 +1,133 @@
-# Sub-Agent MCP Server
+# sub-agent MCP Server
 
-A Model Context Protocol (MCP) server that provides chat completion capabilities with background processing support.
+A Model Context Protocol (MCP) server that allows sending chat completion messages to any OpenAI-compatible endpoint, with support for background job tracking using goroutines and in-memory storage with TTL.
 
 ## Features
 
-- **Chat Completion Tool**: Send messages to OpenAI API with synchronous or asynchronous processing
-- **Background Processing**: Execute chat completions in the background and retrieve results later
-- **Task Management**: List active background tasks and get their results
-- **TTL-based Cleanup**: Automatic cleanup of expired tasks based on configurable TTL
+- Send chat completion requests to OpenAI-compatible endpoints
+- Background job tracking with asynchronous execution
+- In-memory storage with configurable TTL for results
+- Three MCP tools for managing sub-agent calls
 
-## Installation
+## Configuration
+
+The server is configured via environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_BASE_URL` | The base URL for the OpenAI API endpoint | `https://api.openai.com/v1` |
+| `OPENAI_MODEL` | The model to use for chat completions | `gpt-3.5-turbo` |
+| `OPENAI_API_KEY` | The API key for authentication | Required |
+| `TTL` | Time-to-live for stored results (Go duration format) | `1h` |
+
+## MCP Tools
+
+### `sub_agent_send`
+
+Send a chat completion message to an OpenAI-compatible endpoint.
+
+**Input:**
+- `message` (string, required): The message to send to the OpenAI endpoint
+- `background` (boolean, optional): Whether to run the request in the background (default: false)
+- `model` (string, optional): Override the default model for this request
+
+**Output:**
+- If synchronous: Returns the completion result directly
+- If background: Returns a task ID for tracking
+
+### `sub_agent_list`
+
+List all active sub-agent calls with their status and creation time.
+
+**Input:** None
+
+**Output:**
+- `results`: Array of sub-agent result objects
+- `count`: Number of active results
+
+### `sub_agent_get_result`
+
+Get the result of a completed sub-agent call by task ID.
+
+**Input:**
+- `task_id` (string, required): The task ID to retrieve the result for
+
+**Output:**
+- `result`: The sub-agent result object, or error if not found/expired
+
+## Usage
 
 ### Building
 
 ```bash
 cd sub-agent
-go build -o sub-agent .
+go build -o sub-agent main.go
 ```
 
 ### Running
 
 ```bash
+export OPENAI_BASE_URL="https://your-openai-compatible-endpoint/v1"
+export OPENAI_MODEL="your-model"
+export OPENAI_API_KEY="your-api-key"
+export TTL="2h"
+
 ./sub-agent
 ```
 
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_BASE_URL` | Base URL for OpenAI API | `https://api.openai.com/v1` |
-| `OPENAI_MODEL` | Model to use for completions | `gpt-4o-mini` |
-| `OPENAI_API_KEY` | API key for OpenAI authentication | (required) |
-| `SUB_AGENT_TTL` | TTL in hours for background task results | `4` |
-
-## Tools
-
-### `sub_agent_chat`
-
-Send a chat completion message to OpenAI.
-
-**Inputs:**
-- `message` (string, required): The message to send to the AI model
-- `background` (boolean, optional): Whether to process in background (default: false)
-
-**Outputs:**
-- If `background` is false: Returns the AI response immediately
-- If `background` is true: Returns a task ID for later retrieval
-
-**Example (synchronous):**
-```json
-{
-  "message": "What is the capital of France?"
-}
-```
-
-**Example (background):**
-```json
-{
-  "message": "Analyze this long document...",
-  "background": true
-}
-```
-
-### `sub_agent_list`
-
-List all active background sub-agent calls.
-
-**Inputs:** None
-
-**Outputs:** List of task objects with task_id, created_at, status, and message
-
-**Example:**
-```json
-[
-  {
-    "task_id": "task-1234567890",
-    "created_at": "2024-01-01T12:00:00Z",
-    "status": "completed",
-    "message": "What is the capital of France?"
-  }
-]
-```
-
-### `sub_agent_get_result`
-
-Get the result of a background task.
-
-**Inputs:**
-- `task_id` (string, required): The task ID to get result for
-
-**Outputs:** Task result or error if not found/expired
-
-**Example:**
-```json
-{
-  "task_id": "task-1234567890"
-}
-```
-
-## Usage
-
-### With a MCP Client
-
-Configure your MCP client to use the sub-agent server:
+### Example: Synchronous Request
 
 ```json
 {
-  "mcpServers": {
-    "sub-agent": {
-      "command": "./sub-agent",
-      "args": [],
-      "env": {
-        "OPENAI_API_KEY": "your-api-key",
-        "OPENAI_MODEL": "gpt-4o-mini",
-        "SUB_AGENT_TTL": "4"
-      }
-    }
+  "tool": "sub_agent_send",
+  "arguments": {
+    "message": "Hello, how are you?"
   }
 }
 ```
 
-### Direct API Usage
+### Example: Background Request
 
-```bash
-# Build and run the server
-go build -o sub-agent .
-./sub-agent
+```json
+{
+  "tool": "sub_agent_send",
+  "arguments": {
+    "message": "Generate a summary of the following text...",
+    "background": true
+  }
+}
+// Returns: {"task_id": "uuid", "status": "queued"}
+```
 
-# Or run directly
-go run main.go
+### Example: List All Jobs
+
+```json
+{
+  "tool": "sub_agent_list",
+  "arguments": {}
+}
+```
+
+### Example: Get Result
+
+```json
+{
+  "tool": "sub_agent_get_result",
+  "arguments": {
+    "task_id": "uuid-from-background-request"
+  }
+}
 ```
 
 ## Architecture
 
-The server maintains an in-memory store of background tasks with the following characteristics:
+- **In-memory Store**: Uses a thread-safe map with read/write locks for concurrent access
+- **TTL Cleanup**: Background goroutine periodically removes expired entries (runs every minute)
+- **OpenAI Client**: Uses the `github.com/sashabaranov/go-openai` library for API calls
+- **UUID Generation**: Uses `github.com/google/uuid` for unique task IDs
 
-1. **Task Storage**: Concurrent map with read-write mutex for thread safety
-2. **TTL Management**: Automatic cleanup of expired tasks every hour
-3. **Background Processing**: Goroutines for asynchronous task execution
-4. **Status Tracking**: Tasks track their status (pending, completed, expired)
+## Dependencies
 
-## License
-
-MIT
+- `github.com/modelcontextprotocol/go-sdk`: MCP protocol implementation
+- `github.com/sashabaranov/go-openai`: OpenAI API client
+- `github.com/google/uuid`: UUID generation

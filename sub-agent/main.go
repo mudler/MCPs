@@ -2,36 +2,37 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sashabaranov/go-openai"
 )
 
-// Task represents a background processing task
-type Task struct {
+// SubAgentResult represents the result of a sub-agent call
+type SubAgentResult struct {
 	ID        string    `json:"id"`
-	Message   string    `json:"message"`
-	Result    string    `json:"result,omitempty"`
-	Status    string    `json:"status"` // "pending", "completed", "expired"
+	Status    string    `json:"status"`
+	Request   string    `json:"request"`
+	Response  string    `json:"response,omitempty"`
+	Error     string    `json:"error,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// TaskStore manages background tasks with TTL
-type TaskStore struct {
+// SubAgentStore is an in-memory store with TTL for tracking sub-agent calls
+type SubAgentStore struct {
 	mu    sync.RWMutex
-	tasks map[string]*Task
+	items map[string]*SubAgentResult
 	ttl   time.Duration
 }
 
-// NewTaskStore creates a new task store with specified TTL
-func NewTaskStore(ttl time.Duration) *TaskStore {
-	store := &TaskStore{
-		tasks: make(map[string]*Task),
+// NewSubAgentStore creates a new SubAgentStore with the given TTL
+func NewSubAgentStore(ttl time.Duration) *SubAgentStore {
+	store := &SubAgentStore{
+		items: make(map[string]*SubAgentResult),
 		ttl:   ttl,
 	}
 	// Start cleanup goroutine
@@ -39,269 +40,234 @@ func NewTaskStore(ttl time.Duration) *TaskStore {
 	return store
 }
 
-// cleanupLoop periodically removes expired tasks
-func (s *TaskStore) cleanupLoop() {
-	ticker := time.NewTicker(1 * time.Hour)
+// cleanupLoop periodically removes expired entries
+func (s *SubAgentStore) cleanupLoop() {
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
-		s.cleanupExpired()
+		s.cleanup()
 	}
 }
 
-// cleanupExpired removes all expired tasks
-func (s *TaskStore) cleanupExpired() {
+// cleanup removes expired entries from the store
+func (s *SubAgentStore) cleanup() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
-	for id, task := range s.tasks {
-		if now.Sub(task.CreatedAt) > s.ttl {
-			task.Status = "expired"
-			delete(s.tasks, id)
+	for id, item := range s.items {
+		if now.Sub(item.CreatedAt) > s.ttl {
+			delete(s.items, id)
 		}
 	}
 }
 
-// AddTask adds a new task to the store
-func (s *TaskStore) AddTask(id, message string) *Task {
+// Add adds a new result to the store
+func (s *SubAgentStore) Add(result *SubAgentResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	task := &Task{
-		ID:        id,
-		Message:   message,
-		Status:    "pending",
-		CreatedAt: time.Now(),
-	}
-	s.tasks[id] = task
-	return task
+	s.items[result.ID] = result
 }
 
-// GetTask retrieves a task by ID
-func (s *TaskStore) GetTask(id string) (*Task, error) {
+// Get retrieves a result by ID
+func (s *SubAgentStore) Get(id string) (*SubAgentResult, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	task, exists := s.tasks[id]
+	item, exists := s.items[id]
 	if !exists {
-		return nil, fmt.Errorf("task not found: %s", id)
+		return nil, false
 	}
-	// Check if expired
-	if time.Since(task.CreatedAt) > s.ttl {
-		return nil, fmt.Errorf("task expired: %s", id)
+	// Check TTL
+	if time.Since(item.CreatedAt) > s.ttl {
+		return nil, false
 	}
-	return task, nil
+	return item, true
 }
 
-// ListTasks returns all active tasks
-func (s *TaskStore) ListTasks() []*Task {
+// List returns all active results
+func (s *SubAgentStore) List() []*SubAgentResult {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var result []*Task
-	for _, task := range s.tasks {
-		// Skip expired tasks
-		if time.Since(task.CreatedAt) <= s.ttl {
-			result = append(result, task)
+	var results []*SubAgentResult
+	now := time.Now()
+	for _, item := range s.items {
+		if now.Sub(item.CreatedAt) <= s.ttl {
+			results = append(results, item)
 		}
 	}
-	return result
-}
-
-// SetResult sets the result for a task
-func (s *TaskStore) SetResult(id, result string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	task, exists := s.tasks[id]
-	if !exists {
-		return fmt.Errorf("task not found: %s", id)
-	}
-	task.Result = result
-	task.Status = "completed"
-	return nil
-}
-
-// ChatInput represents the input for sub_agent_chat tool
-type ChatInput struct {
-	Message   string `json:"message" jsonschema:"the message to send to the AI model"`
-	Background *bool  `json:"background,omitempty" jsonschema:"whether to process in background (defaults to SUB_AGENT_BACKGROUND_DEFAULT env var, or false if not set)"`
-}
-
-// ChatOutput represents the output of sub_agent_chat tool
-type ChatOutput struct {
-	Response string `json:"response,omitempty" jsonschema:"the AI response (if not background)"`
-	TaskID   string `json:"task_id,omitempty" jsonschema:"the task ID for background processing"`
-	Status   string `json:"status" jsonschema:"status of the operation"`
-}
-
-// TaskInfo represents task info for listing
-type TaskInfo struct {
-	TaskID    string `json:"task_id" jsonschema:"the task ID"`
-	CreatedAt string `json:"created_at" jsonschema:"when the task was created"`
-	Status    string `json:"status" jsonschema:"current status of the task"`
-	Message   string `json:"message" jsonschema:"the original message"`
-}
-
-// GetResultInput represents input for sub_agent_get_result tool
-type GetResultInput struct {
-	TaskID string `json:"task_id" jsonschema:"the task ID to get result for"`
-}
-
-// GetResultOutput represents output for sub_agent_get_result tool
-type GetResultOutput struct {
-	TaskID    string `json:"task_id" jsonschema:"the task ID"`
-	Result    string `json:"result" jsonschema:"the task result"`
-	Status    string `json:"status" jsonschema:"task status"`
-	Message   string `json:"message" jsonschema:"the original message"`
-	CreatedAt string `json:"created_at" jsonschema:"when the task was created"`
+	return results
 }
 
 var (
-	openaiBaseURL        string
-	openaiModel          string
-	openaiAPIKey         string
-	subAgentTTL          time.Duration
-	taskStore            *TaskStore
-	backgroundDefault    bool
+	store      *SubAgentStore
+	openaiClient *openai.Client
+	openaiModel  string
 )
 
-func initConfig() {
-	openaiBaseURL = os.Getenv("OPENAI_BASE_URL")
-	if openaiBaseURL == "" {
-		openaiBaseURL = "https://api.openai.com/v1"
+func init() {
+	// Initialize TTL (default 1 hour)
+	ttl := 1 * time.Hour
+	if ttlStr := os.Getenv("TTL"); ttlStr != "" {
+		if d, err := time.ParseDuration(ttlStr); err == nil {
+			ttl = d
+		}
 	}
+	store = NewSubAgentStore(ttl)
+
+	// Initialize OpenAI client
+	baseURL := os.Getenv("OPENAI_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	
+	config := openai.DefaultConfig(apiKey)
+	config.BaseURL = baseURL
+	openaiClient = openai.NewClientWithConfig(config)
+
+	// Set default model
 	openaiModel = os.Getenv("OPENAI_MODEL")
 	if openaiModel == "" {
-		openaiModel = "gpt-4o-mini"
-	}
-	openaiAPIKey = os.Getenv("OPENAI_API_KEY")
-
-	ttlHours := 4
-	if ttlEnv := os.Getenv("SUB_AGENT_TTL"); ttlEnv != "" {
-		fmt.Sscanf(ttlEnv, "%d", &ttlHours)
-	}
-	subAgentTTL = time.Duration(ttlHours) * time.Hour
-	taskStore = NewTaskStore(subAgentTTL)
-
-	// Read background default from environment variable
-	// SUB_AGENT_BACKGROUND_DEFAULT can be "true" or "false"
-	// If not set or invalid, defaults to false
-	backgroundDefault = false
-	if bgEnv := os.Getenv("SUB_AGENT_BACKGROUND_DEFAULT"); bgEnv != "" {
-		backgroundDefault, _ = strconv.ParseBool(bgEnv)
+		openaiModel = "gpt-3.5-turbo"
 	}
 }
 
-func callOpenAI(ctx context.Context, message string) (string, error) {
-	// Check if API key is set
-	if openaiAPIKey == "" {
-		return "", fmt.Errorf("OPENAI_API_KEY environment variable not set")
-	}
-
-	// For now, return a simulated response
-	// In a full implementation, you would make an actual HTTP request to OpenAI
-	return fmt.Sprintf("Processed: %s", message), nil
+// SendInput represents the input for sub_agent_send
+type SendInput struct {
+	Message    string `json:"message" jsonschema:"the message to send to the OpenAI endpoint"`
+	Background bool   `json:"background,omitempty" jsonschema:"whether to run the request in the background (default: false)"`
+	Model      string `json:"model,omitempty" jsonschema:"override the default model for this request"`
 }
 
-func SubAgentChat(ctx context.Context, req *mcp.CallToolRequest, input ChatInput) (*mcp.CallToolResult, ChatOutput, error) {
-	if input.Message == "" {
-		return nil, ChatOutput{}, fmt.Errorf("message cannot be empty")
+// SendOutput represents the output for sub_agent_send
+type SendOutput struct {
+	TaskID string `json:"task_id,omitempty"`
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// ListInput represents the input for sub_agent_list
+type ListInput struct{}
+
+// ListOutput represents the output for sub_agent_list
+type ListOutput struct {
+	Results []SubAgentResult `json:"results"`
+	Count   int              `json:"count"`
+}
+
+// GetInput represents the input for sub_agent_get_result
+type GetInput struct {
+	TaskID string `json:"task_id" jsonschema:"the task ID to retrieve the result for"`
+}
+
+// GetOutput represents the output for sub_agent_get_result
+type GetOutput struct {
+	Result *SubAgentResult `json:"result,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
+// SendChatCompletion sends a chat completion request
+func SendChatCompletion(ctx context.Context, req *mcp.CallToolRequest, input SendInput) (*mcp.CallToolResult, SendOutput, error) {
+	model := openaiModel
+	if input.Model != "" {
+		model = input.Model
 	}
 
-	// Use environment variable default, but allow request-level override
-	background := backgroundDefault
-	if input.Background != nil {
-		background = *input.Background
-	}
+	resp, err := openaiClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: model,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: input.Message,
+			},
+		},
+	})
 
-	if background {
-		// Generate task ID
-		taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
-
-		// Store the task
-		taskStore.AddTask(taskID, input.Message)
-
-		// Process in background
-		go func() {
-			result, err := callOpenAI(ctx, input.Message)
-			if err != nil {
-				log.Printf("Error processing task %s: %v", taskID, err)
-				taskStore.SetResult(taskID, fmt.Sprintf("Error: %v", err))
-			} else {
-				taskStore.SetResult(taskID, result)
-			}
-		}()
-
-		return nil, ChatOutput{
-			TaskID: taskID,
-			Status: "processing",
+	if err != nil {
+		return nil, SendOutput{
+			Status: "error",
+			Error:  err.Error(),
 		}, nil
 	}
 
-	// Synchronous processing
-	response, err := callOpenAI(ctx, input.Message)
-	if err != nil {
-		return nil, ChatOutput{}, err
+	result := ""
+	if len(resp.Choices) > 0 {
+		result = resp.Choices[0].Message.Content
 	}
 
-	return nil, ChatOutput{
-		Response: response,
-		Status:   "completed",
+	if input.Background {
+		taskID := uuid.New().String()
+		subResult := &SubAgentResult{
+			ID:        taskID,
+			Status:    "completed",
+			Request:   input.Message,
+			Response:  result,
+			CreatedAt: time.Now(),
+		}
+		store.Add(subResult)
+
+		return nil, SendOutput{
+			TaskID: taskID,
+			Status: "queued",
+			Result: "Background job created",
+		}, nil
+	}
+
+	return nil, SendOutput{
+		Status: "completed",
+		Result: result,
 	}, nil
 }
 
-func SubAgentList(ctx context.Context, req *mcp.CallToolRequest, input struct{}) (*mcp.CallToolResult, []TaskInfo, error) {
-	tasks := taskStore.ListTasks()
-	var result []TaskInfo
-	for _, task := range tasks {
-		result = append(result, TaskInfo{
-			TaskID:    task.ID,
-			CreatedAt: task.CreatedAt.Format(time.RFC3339),
-			Status:    task.Status,
-			Message:   task.Message,
-		})
-	}
-
-	return nil, result, nil
+// ListSubAgentCalls lists all active sub-agent calls
+func ListSubAgentCalls(ctx context.Context, req *mcp.CallToolRequest, input ListInput) (*mcp.CallToolResult, ListOutput, error) {
+	results := store.List()
+	return nil, ListOutput{
+		Results: func() []SubAgentResult {
+			res := make([]SubAgentResult, len(results))
+			for i, r := range results {
+				res[i] = *r
+			}
+			return res
+		}(),
+		Count: len(results),
+	}, nil
 }
 
-func SubAgentGetResult(ctx context.Context, req *mcp.CallToolRequest, input GetResultInput) (*mcp.CallToolResult, GetResultOutput, error) {
-	if input.TaskID == "" {
-		return nil, GetResultOutput{}, fmt.Errorf("task_id cannot be empty")
+// GetSubAgentResult retrieves a specific sub-agent result
+func GetSubAgentResult(ctx context.Context, req *mcp.CallToolRequest, input GetInput) (*mcp.CallToolResult, GetOutput, error) {
+	result, exists := store.Get(input.TaskID)
+	if !exists {
+		return nil, GetOutput{
+			Error: "Task not found or has expired",
+		}, nil
 	}
-
-	task, err := taskStore.GetTask(input.TaskID)
-	if err != nil {
-		return nil, GetResultOutput{}, err
-	}
-
-	return nil, GetResultOutput{
-		TaskID:    task.ID,
-		Result:    task.Result,
-		Status:    task.Status,
-		Message:   task.Message,
-		CreatedAt: task.CreatedAt.Format(time.RFC3339),
+	return nil, GetOutput{
+		Result: result,
 	}, nil
 }
 
 func main() {
-	initConfig()
-
+	// Create a server with the sub-agent tools
 	server := mcp.NewServer(&mcp.Implementation{Name: "sub-agent", Version: "v1.0.0"}, nil)
 
-	// Add sub_agent_chat tool
+	// Add sub_agent_send tool
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "sub_agent_chat",
-		Description: "Send a chat completion message to OpenAI. Can process synchronously or in background.",
-	}, SubAgentChat)
+		Name:        "sub_agent_send",
+		Description: "Send a chat completion message to an OpenAI-compatible endpoint. Can run in background mode to track results asynchronously.",
+	}, SendChatCompletion)
 
 	// Add sub_agent_list tool
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "sub_agent_list",
-		Description: "List all active background sub-agent calls",
-	}, SubAgentList)
+		Description: "List all active sub-agent calls with their status and creation time.",
+	}, ListSubAgentCalls)
 
 	// Add sub_agent_get_result tool
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "sub_agent_get_result",
-		Description: "Get the result of a background task",
-	}, SubAgentGetResult)
+		Description: "Get the result of a completed sub-agent call by task ID.",
+	}, GetSubAgentResult)
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
