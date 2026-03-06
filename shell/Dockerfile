@@ -45,6 +45,8 @@ RUN mkdir -p /tmp/shell-sessions
 # Set environment variables
 ENV SHELL_CMD="bash -c"
 ENV SHELL_WORKING_DIR="/root"
+ENV SHELL_TIMEOUT="30"
+# Set SHELL_TIMEOUT_DISABLED=true to disable timeout completely
 ENV TOOL_NAME=execute_command
 
 # Run the MCP server

@@ -45,6 +45,12 @@ func getWorkingDirectory() string {
 	return os.Getenv("SHELL_WORKING_DIR")
 }
 
+// getTimeoutDisabled returns whether timeout is disabled via SHELL_TIMEOUT_DISABLED env var
+func getTimeoutDisabled() bool {
+	timeoutDisabled := os.Getenv("SHELL_TIMEOUT_DISABLED")
+	return strings.ToLower(timeoutDisabled) == "true"
+}
+
 // getTimeout returns the default timeout from SHELL_TIMEOUT env var,
 // or 30 seconds if not set or invalid
 func getTimeout() int {
@@ -65,14 +71,28 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 	ExecuteCommandOutput,
 	error,
 ) {
-	// Set default timeout if not provided
-	timeout := input.Timeout
-	if timeout <= 0 {
-		timeout = getTimeout()
+	// Determine timeout based on whether it's disabled
+	var timeout int
+	if getTimeoutDisabled() {
+		// Timeout is disabled - use 0 to indicate no timeout
+		timeout = 0
+	} else {
+		// Set default timeout if not provided
+		timeout = input.Timeout
+		if timeout <= 0 {
+			timeout = getTimeout()
+		}
 	}
 
-	// Create a context with timeout
-	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	// Create a context with timeout (or no timeout if disabled)
+	var cmdCtx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		cmdCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	} else {
+		cmdCtx = ctx
+		cancel = func() {}
+	}
 	defer cancel()
 
 	// Get shell command from environment variable (default: "sh -c")
@@ -181,7 +201,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). Timeout can be disabled by setting SHELL_TIMEOUT_DISABLED=true. An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server
