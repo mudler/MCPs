@@ -527,6 +527,8 @@ A shell script execution server that allows AI models to execute shell scripts a
 
 **Configuration:**
 - `SHELL_CMD` - Environment variable to set the shell command to use (default: `sh -c`). Can include arguments, e.g., `bash -x` or `zsh`
+- `SHELL_TIMEOUT_DISABLED` - Set to `true` to disable the timeout completely (default: timeout is 30 seconds)
+- `SHELL_TIMEOUT` - Environment variable to set the timeout in seconds (default: 30 seconds)
 - `SHELL_WORKING_DIR` - Environment variable to set the working directory for script execution (default: current directory)
 
 **Input Format:**
@@ -546,12 +548,14 @@ A shell script execution server that allows AI models to execute shell scripts a
   "exit_code": 0,
   "success": true,
   "error": ""
-}
-```
-
 **Docker Image:**
 ```bash
 docker run -e SHELL_CMD=bash ghcr.io/mudler/mcps/shell:latest
+```
+
+With timeout disabled:
+```bash
+docker run -e SHELL_CMD=bash -e SHELL_TIMEOUT_DISABLED=true ghcr.io/mudler/mcps/shell:latest
 ```
 
 With custom working directory:
