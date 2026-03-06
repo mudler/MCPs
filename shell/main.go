@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -43,6 +45,27 @@ func getWorkingDirectory() string {
 	return os.Getenv("SHELL_WORKING_DIR")
 }
 
+// getTimeout returns the default timeout from SHELL_TIMEOUT env var,
+// or 30 seconds if not set or invalid
+func getTimeout() int {
+	timeoutStr := os.Getenv("SHELL_TIMEOUT")
+	if timeoutStr == "" {
+		return 30
+	}
+	timeout, err := strconv.Atoi(timeoutStr)
+	if err != nil || timeout <= 0 {
+		return 30
+	}
+	return timeout
+}
+
+// isTimeoutDisabled checks if the SHELL_TIMEOUT_DISABLED environment variable is set to "true"
+// (case-insensitive). Returns true if timeout should be disabled.
+func isTimeoutDisabled() bool {
+	disabledStr := os.Getenv("SHELL_TIMEOUT_DISABLED")
+	return strings.ToLower(disabledStr) == "true"
+}
+
 // ExecuteCommand executes a shell script and returns the output
 func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input ExecuteCommandInput) (
 	*mcp.CallToolResult,
@@ -52,14 +75,24 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 	// Set default timeout if not provided
 	timeout := input.Timeout
 	if timeout <= 0 {
-		timeout = 30
+		timeout = getTimeout()
 	}
 
-	// Create a context with timeout
-	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	var cmdCtx context.Context
+	var cancel context.CancelFunc
+
+	// Check if timeout is disabled
+	if isTimeoutDisabled() {
+		// Use background context without timeout
+		cmdCtx = ctx
+		cancel = func() {} // No-op cancel function
+	} else {
+		// Create a context with timeout
+		cmdCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	}
 	defer cancel()
 
-	// Get shell command from environment variable (default: "sh")
+	// Get shell command from environment variable (default: "sh -c")
 	shellCmd := getShellCommand()
 
 	// Parse shell command - support both single command and command with args
@@ -82,10 +115,23 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		cmd.Dir = workDir
 	}
 
+	// CRITICAL FIX: Set process group to enable killing entire process tree
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true, // Create new process group
+	}
+
 	// Create buffers to capture stdout and stderr separately
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
+
+	// Set environment variables to force non-interactive mode
+	env := os.Environ()
+	env = append(env, "CI=true")           // Common flag for CI/CD to disable interactive mode
+	env = append(env, "TERM=dumb")          // Force dumb terminal
+	env = append(env, "INPUT=/dev/null")    // Redirect stdin from /dev/null
+	env = append(env, "NONINTERACTIVE=1")   // Common flag for non-interactive mode
+	cmd.Env = env
 
 	// Execute command
 	err := cmd.Run()
@@ -104,7 +150,13 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 		} else {
 			// Context timeout or other error
 			if cmdCtx.Err() == context.DeadlineExceeded {
-				errorMsg = "Command timed out"
+				errorMsg = "Command timed out after " + strconv.Itoa(timeout) + " seconds"
+				
+				// CRITICAL: Kill the entire process group on timeout
+				if cmd.Process != nil && cmd.Process.Pid > 0 {
+					// Kill the process group (negative PID)
+					syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				}
 			}
 			exitCode = -1
 		}
@@ -125,14 +177,11 @@ func ExecuteCommand(ctx context.Context, req *mcp.CallToolRequest, input Execute
 func main() {
 	// Run initialization script if SHELL_INIT_SCRIPT is set
 	if initScript := os.Getenv("SHELL_INIT_SCRIPT"); initScript != "" {
-		log.Printf("Running initialization script: %s", initScript)
 		cmd := exec.CommandContext(context.Background(), "sh", "-c", initScript)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Fatalf("Initialization script failed: %v", err)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("Initialization script failed: %v\nOutput: %s", err, string(output))
 		}
-		log.Println("Initialization script completed successfully")
 	}
 
 	// Create MCP server for shell command execution
@@ -149,7 +198,7 @@ func main() {
 	// Add tool for executing shell scripts
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        configurableName,
-		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
+		Description: "Execute a shell script and return the output, exit code, and any errors. The shell command can be configured via SHELL_CMD environment variable (default: 'sh -c'). The working directory can be set via SHELL_WORKING_DIR environment variable. The default timeout can be configured via SHELL_TIMEOUT environment variable (default: 30 seconds). The timeout can be disabled by setting SHELL_TIMEOUT_DISABLED=true (case-insensitive). An initialization script can be run before server startup via SHELL_INIT_SCRIPT environment variable.",
 	}, ExecuteCommand)
 
 	// Run the server

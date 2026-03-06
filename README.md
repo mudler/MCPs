@@ -432,6 +432,7 @@ A shell script execution server that allows AI models to execute shell scripts a
 - Separate stdout and stderr capture
 - Exit code reporting
 - Configurable timeout (default: 30 seconds)
+- Option to disable timeout completely
 - JSON schema validation for inputs/outputs
 
 **Tool:**
@@ -440,6 +441,8 @@ A shell script execution server that allows AI models to execute shell scripts a
 **Configuration:**
 - `SHELL_CMD` - Environment variable to set the shell command to use (default: `sh -c`). Can include arguments, e.g., `bash -x` or `zsh`
 - `SHELL_WORKING_DIR` - Environment variable to set the working directory for script execution (default: current directory)
+- `SHELL_TIMEOUT` - Environment variable to set the timeout in seconds (default: 30)
+- `SHELL_TIMEOUT_DISABLED` - Set to `true` (case-insensitive) to disable timeout completely, allowing commands to run indefinitely
 
 **Input Format:**
 ```json
@@ -471,6 +474,11 @@ With custom working directory:
 docker run -e SHELL_CMD=bash -e SHELL_WORKING_DIR=/workspace ghcr.io/mudler/mcps/shell:latest
 ```
 
+To disable timeout:
+```bash
+docker run -e SHELL_TIMEOUT_DISABLED=true ghcr.io/mudler/mcps/shell:latest
+```
+
 **LocalAI configuration ( to add to the model config):**
 ```yaml
 mcp:
@@ -491,7 +499,6 @@ mcp:
       }
     }
 ```
-
 ### 🔐 SSH Server
 
 An SSH server that allows AI models to connect to remote SSH hosts and execute shell scripts.

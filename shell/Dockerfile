@@ -48,6 +48,9 @@ RUN mkdir -p /tmp/shell-sessions
 ENV SHELL_CMD="bash -c"
 ENV SHELL_WORKING_DIR="/root"
 ENV TOOL_NAME=execute_command
+# Set timeout in seconds (default: 30)
+# Set SHELL_TIMEOUT_DISABLED=true to disable timeout completely
+ENV SHELL_TIMEOUT=30
 
 # Run the MCP server
 ENTRYPOINT ["shell-mcp-server"]
