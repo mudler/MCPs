@@ -132,11 +132,7 @@ func init() {
 	config.BaseURL = baseURL
 	openaiClient = openai.NewClientWithConfig(config)
 
-	// Set default model
 	openaiModel = os.Getenv("OPENAI_MODEL")
-	if openaiModel == "" {
-		openaiModel = "gpt-3.5-turbo"
-	}
 }
 
 // SendInput represents the input for sub_agent_send
@@ -176,9 +172,9 @@ type GetOutput struct {
 
 // SendChatCompletion sends a chat completion request
 func SendChatCompletion(ctx context.Context, req *mcp.CallToolRequest, input SendInput) (*mcp.CallToolResult, SendOutput, error) {
-	model := openaiModel
-	if input.Model != "" {
-		model = input.Model
+	model := input.Model
+	if openaiModel != "" {
+		model = openaiModel
 	}
 
 	resp, err := openaiClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
