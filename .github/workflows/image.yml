@@ -24,6 +24,9 @@ jobs:
           - mcp: weather
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: openweathermap
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: wait
             dockerfile: ./Dockerfile
             context: ./
