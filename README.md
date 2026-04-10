@@ -140,6 +140,71 @@ mcp:
 ```
 
 
+### OpenWeatherMap Server
+
+An OpenWeatherMap-based weather server that provides current conditions and a 5-day forecast for cities worldwide.
+
+**Features:**
+- OpenWeatherMap geocoding lookup for city names
+- Current weather conditions (temperature, wind, description)
+- 5-day forecast derived from the OpenWeatherMap forecast API
+- Retry logic for common city formats such as `City, TX`
+- JSON schema validation for inputs/outputs
+- HTTP timeout and upstream error handling
+
+**Tool:**
+- `get_weather` - Get current weather and a 5-day forecast for a city using OpenWeatherMap
+
+**Configuration:**
+- `OWM_API_KEY` - OpenWeatherMap API key
+
+**API Response Format:**
+```json
+{
+  "temperature": "80.1 F",
+  "wind": "17.3 mph",
+  "description": "broken clouds",
+  "forecast": [
+    {
+      "day": "2026-04-03",
+      "temperature": "80.1 F",
+      "wind": "17.3 mph"
+    },
+    {
+      "day": "2026-04-04",
+      "temperature": "76.2 F",
+      "wind": "11.4 mph"
+    }
+  ]
+}
+```
+
+**Docker Image:**
+```bash
+docker run -e OWM_API_KEY=your-api-key ghcr.io/mudler/mcps/openweathermap:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "openweathermap": {
+          "command": "docker",
+          "env": {
+            "OWM_API_KEY": "your-api-key"
+          },
+          "args": [
+            "run", "-i", "--rm", "--init",
+            "-e", "OWM_API_KEY",
+            "ghcr.io/mudler/mcps/openweathermap:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🧠 Think Server
 
 A no-op tool that forces the model to think about a message. Useful for debugging or forcing explicit reasoning steps in the model.
@@ -1688,6 +1753,7 @@ make dev
 # Build specific server
 make MCP_SERVER=duckduckgo build
 make MCP_SERVER=weather build
+make MCP_SERVER=openweathermap build
 make MCP_SERVER=wait build
 make MCP_SERVER=memory build
 make MCP_SERVER=shell build
