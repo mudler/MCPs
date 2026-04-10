@@ -72,6 +72,9 @@ jobs:
           - mcp: sub-agent
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: jellyfin
+            dockerfile: ./Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read

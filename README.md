@@ -1601,6 +1601,71 @@ mcp:
     }
 ```
 
+### 🎬 Jellyfin Server
+
+A Jellyfin media server MCP that provides tools for searching, browsing, and controlling your Jellyfin media library.
+
+**Features:**
+- Search and browse media (movies, series, episodes) with filtering and pagination
+- Get detailed item metadata (cast, media quality, external IDs)
+- TV show navigation (seasons, episodes, next up)
+- Playback control on active sessions (pause, stop, seek, next/prev)
+- User data management (favorites, played status)
+- Similar item recommendations
+- Configurable tool registration (enable only the tools you need)
+
+**Tools:**
+- `search` - Full-text search across all media types
+- `browse_library` - Browse/filter items with sorting and pagination
+- `get_item` - Get full metadata for a specific item
+- `list_libraries` - List all media libraries
+- `get_similar` - Find similar items for recommendations
+- `get_latest` - Get recently added items (requires user ID)
+- `get_seasons` - List seasons for a TV series
+- `get_episodes` - List episodes, optionally by season
+- `get_next_up` - Get next unwatched episodes (requires user ID)
+- `get_sessions` - List active playback sessions
+- `playback_control` - Control playback (Pause, Unpause, Stop, NextTrack, PreviousTrack, Seek)
+- `set_favorite` - Mark/unmark items as favorites (requires user ID)
+- `set_played` - Mark/unmark items as played (requires user ID)
+
+**Configuration:**
+- `JELLYFIN_URL` - Jellyfin server URL (required, e.g. `http://jellyfin:8096`)
+- `JELLYFIN_API_KEY` - API key for authentication (required, create in Dashboard > Admin > API Keys)
+- `JELLYFIN_USERNAME` - Username to resolve for user-scoped operations (optional, easier alternative to user ID)
+- `JELLYFIN_USER_ID` - User ID for user-scoped operations like favorites, played, next-up (optional, use JELLYFIN_USERNAME instead)
+- `JELLYFIN_TOOLS` - Comma-separated list of tools to register, or "all" (default: all)
+
+**Docker Image:**
+```bash
+docker run -e JELLYFIN_URL=http://jellyfin:8096 -e JELLYFIN_API_KEY=your-key ghcr.io/mudler/mcps/jellyfin:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "jellyfin": {
+          "command": "docker",
+          "env": {
+            "JELLYFIN_URL": "http://your-jellyfin:8096",
+            "JELLYFIN_API_KEY": "your-api-key",
+            "JELLYFIN_USERNAME": "your-username"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "-e", "JELLYFIN_URL",
+            "-e", "JELLYFIN_API_KEY",
+            "-e", "JELLYFIN_USERNAME",
+            "ghcr.io/mudler/mcps/jellyfin:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -1633,6 +1698,7 @@ make MCP_SERVER=todo build
 make MCP_SERVER=mailbox build
 make MCP_SERVER=filesystem build
 make MCP_SERVER=claude build
+make MCP_SERVER=jellyfin build
 
 # Run tests and checks
 make ci-local
