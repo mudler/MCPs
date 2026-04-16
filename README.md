@@ -1731,6 +1731,54 @@ mcp:
     }
 ```
 
+### 🐙 GitHub Server
+
+A read-only GitHub MCP for reading issues and pull requests — their description, metadata, and discussion comments, plus the unified diff for PRs on request.
+
+**Features:**
+- Read issues (title, body, labels, state, comments)
+- Read pull requests (title, body, base/head refs, draft/merged flags, comments)
+- Optionally fetch the unified diff of a pull request
+- Accepts either `owner/repo/number` or a full GitHub URL
+- Works anonymously on public repos (rate-limited) or authenticated via `GITHUB_TOKEN`
+- Comment truncation to protect context size
+
+**Tools:**
+- `get_issue` - Fetch an issue with its body and comments
+- `get_pull_request` - Fetch a PR with its body, comments, and (optionally) its unified diff
+
+**Configuration:**
+- `GITHUB_TOKEN` - Personal access token (optional; required for private repos and higher rate limits)
+- `GITHUB_API_URL` - API base URL (default: `https://api.github.com`; set for GitHub Enterprise)
+- `GITHUB_MAX_COMMENT_LENGTH` - Max characters per comment/body before truncation (default: 4000)
+- `GITHUB_TOOLS` - Comma-separated list of tools to register, or `all` (default: all)
+
+**Docker Image:**
+```bash
+docker run -e GITHUB_TOKEN=your-token ghcr.io/mudler/mcps/github:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "github": {
+          "command": "docker",
+          "env": {
+            "GITHUB_TOKEN": "your-token"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "-e", "GITHUB_TOKEN",
+            "ghcr.io/mudler/mcps/github:master"
+          ]
+        }
+      }
+    }
+```
+
 ## Development
 
 ### Prerequisites
@@ -1765,6 +1813,7 @@ make MCP_SERVER=mailbox build
 make MCP_SERVER=filesystem build
 make MCP_SERVER=claude build
 make MCP_SERVER=jellyfin build
+make MCP_SERVER=github build
 
 # Run tests and checks
 make ci-local

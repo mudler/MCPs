@@ -78,6 +78,9 @@ jobs:
           - mcp: jellyfin
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: github
+            dockerfile: ./Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read
