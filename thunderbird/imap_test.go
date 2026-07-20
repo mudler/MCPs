@@ -74,7 +74,7 @@ var _ = Describe("IMAP", func() {
 	})
 
 	It("rejects local mailbox:// folders as read-only", func() {
-		_, err := m.accountForFolderURI("mailbox://nobody@Local/Inbox")
+		_, err := m.accountForFolderURI("mailbox://nobody@Local%20Folders/INBOX")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("read-only"))
 	})

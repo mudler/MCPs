@@ -22,6 +22,12 @@ func NewIMAP(cfg *Config, creds *Credentials) *IMAP { return &IMAP{cfg: cfg, cre
 func (a Account) hostPort() string { return net.JoinHostPort(a.Hostname, strconv.Itoa(a.Port)) }
 
 func (m *IMAP) accountForFolderURI(uri string) (*Account, error) {
+	// Local-folder URIs (e.g. mailbox://nobody@Local%20Folders/INBOX) may not
+	// parse cleanly with url.Parse, so check the scheme first and return the
+	// friendly read-only error before attempting to parse.
+	if strings.HasPrefix(uri, "mailbox://") {
+		return nil, fmt.Errorf("folder %q is in a local (non-IMAP) account and is read-only", uri)
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("bad folder uri %q: %w", uri, err)
@@ -32,9 +38,6 @@ func (m *IMAP) accountForFolderURI(uri string) (*Account, error) {
 		if a.Type == "imap" && a.Hostname == host {
 			return a, nil
 		}
-	}
-	if strings.HasPrefix(uri, "mailbox://") {
-		return nil, fmt.Errorf("folder %q is in a local (non-IMAP) account and is read-only", uri)
 	}
 	return nil, fmt.Errorf("no IMAP account matches folder %q", uri)
 }
