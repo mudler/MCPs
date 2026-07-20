@@ -6,35 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type toolDef struct {
-	tool     *mcp.Tool
-	handler  interface{}
-	category string // "read", "mutate", "compose"
-}
-
-func allTools() []toolDef {
-	return []toolDef{
-		{&mcp.Tool{Name: "list_accounts", Description: "List Thunderbird mail accounts, their type, and the identities (email addresses) you may send as. Local (POP/Local Folders) accounts are read-only."}, ListAccounts, "read"},
-		{&mcp.Tool{Name: "list_folders", Description: "List mail folders with unread/total counts. Returns folder URIs used as the folder filter in search and as move destinations."}, ListFolders, "read"},
-		{&mcp.Tool{Name: "search_messages", Description: "Search mail via Thunderbird's index. Filter by query text, from, to, subject, folder URI, and date range. Returns message references."}, SearchMessages, "read"},
-		{&mcp.Tool{Name: "get_message", Description: "Fetch a full message (headers, body, attachment list) by the message_ref from search_messages or list_recent."}, GetMessage, "read"},
-		{&mcp.Tool{Name: "list_recent", Description: "List the most recent messages, optionally within a folder URI."}, ListRecent, "read"},
-		{&mcp.Tool{Name: "set_flags", Description: "Mark a message read/unread, set or clear its flag/star, and add or remove tags. IMAP accounts only."}, SetFlags, "mutate"},
-		{&mcp.Tool{Name: "move_message", Description: "Move a message to another folder in the same IMAP account."}, MoveMessage, "mutate"},
-		{&mcp.Tool{Name: "delete_message", Description: "Delete a message: moves to Trash by default, or expunges permanently when permanent=true. IMAP accounts only."}, DeleteMessage, "mutate"},
-		{&mcp.Tool{Name: "send_mail", Description: "Send a new email as one of your identities. Requires THUNDERBIRD_ALLOW_SEND=true."}, SendMail, "compose"},
-		{&mcp.Tool{Name: "reply_message", Description: "Reply to a message, quoting the original and threading correctly. Requires THUNDERBIRD_ALLOW_SEND=true."}, ReplyMessage, "compose"},
-		{&mcp.Tool{Name: "forward_message", Description: "Forward a message to new recipients. Requires THUNDERBIRD_ALLOW_SEND=true."}, ForwardMessage, "compose"},
-		{&mcp.Tool{Name: "save_draft", Description: "Save a draft to the Drafts folder (visible in Thunderbird). Requires THUNDERBIRD_ALLOW_SEND=true."}, SaveDraft, "compose"},
-		{&mcp.Tool{Name: "search_contacts", Description: "Search the Thunderbird address book by name or email substring."}, SearchContacts, "read"},
-		{&mcp.Tool{Name: "get_contact", Description: "Get a single contact by exact email address."}, GetContact, "read"},
-		{&mcp.Tool{Name: "list_calendars", Description: "List the calendars registered in Thunderbird."}, ListCalendars, "read"},
-		{&mcp.Tool{Name: "list_events", Description: "List calendar events in a date range (defaults to the next 30 days)."}, ListEvents, "read"},
-	}
-}
 
 func parseToolFilter(env string) map[string]bool {
 	if env == "" || env == "all" {
@@ -49,44 +23,17 @@ func parseToolFilter(env string) map[string]bool {
 	return set
 }
 
-func registerTool(server *mcp.Server, td toolDef) {
-	// Typed switch added as handlers are implemented (mirrors jellyfin).
-	switch h := td.handler.(type) {
-	case func(context.Context, *mcp.CallToolRequest, ListAccountsInput) (*mcp.CallToolResult, ListAccountsOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ListFoldersInput) (*mcp.CallToolResult, ListFoldersOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, SearchMessagesInput) (*mcp.CallToolResult, SearchMessagesOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, GetMessageInput) (*mcp.CallToolResult, GetMessageOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ListRecentInput) (*mcp.CallToolResult, ListRecentOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, SetFlagsInput) (*mcp.CallToolResult, SetFlagsOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, MoveMessageInput) (*mcp.CallToolResult, MoveMessageOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, DeleteMessageInput) (*mcp.CallToolResult, DeleteMessageOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, SendMailInput) (*mcp.CallToolResult, SendMailOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ReplyMessageInput) (*mcp.CallToolResult, ReplyMessageOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ForwardMessageInput) (*mcp.CallToolResult, ForwardMessageOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, SaveDraftInput) (*mcp.CallToolResult, SaveDraftOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, SearchContactsInput) (*mcp.CallToolResult, SearchContactsOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, GetContactInput) (*mcp.CallToolResult, GetContactOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ListCalendarsInput) (*mcp.CallToolResult, ListCalendarsOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	case func(context.Context, *mcp.CallToolRequest, ListEventsInput) (*mcp.CallToolResult, ListEventsOutput, error):
-		mcp.AddTool(server, td.tool, h)
-	default:
-		log.Fatalf("no registration case for tool %s", td.tool.Name)
+// mustSchema infers the JSON schema for T and overrides the "action" property's
+// enum with the (dynamically gated) set of allowed values.
+func mustSchema[T any](enumValues []any) *jsonschema.Schema {
+	s, err := jsonschema.For[T](nil)
+	if err != nil {
+		log.Fatalf("schema: %v", err)
 	}
+	if p, ok := s.Properties["action"]; ok {
+		p.Enum = enumValues
+	}
+	return s
 }
 
 func main() {
@@ -102,19 +49,40 @@ func main() {
 	log.Printf("thunderbird: loaded profile %s (%d accounts)", profileDir, len(app.Config.Accounts))
 
 	filter := parseToolFilter(os.Getenv("THUNDERBIRD_TOOLS"))
+	allowed := func(name string) bool { return filter == nil || filter[name] }
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "thunderbird", Version: "v1.0.0"}, nil)
 
-	for _, td := range allTools() {
-		if filter != nil && !filter[td.tool.Name] {
-			continue
-		}
-		if app.ReadOnly && (td.category == "mutate" || td.category == "compose") {
-			continue
-		}
-		if td.category == "compose" && !app.AllowSend {
-			continue
-		}
-		registerTool(server, td)
+	mailActions := []any{"list_accounts", "list_folders", "search_messages", "get_message", "list_recent"}
+	if !app.ReadOnly {
+		mailActions = append(mailActions, "set_flags", "move_message", "delete_message")
+	}
+	if app.AllowSend && !app.ReadOnly {
+		mailActions = append(mailActions, "send_mail", "reply_message", "forward_message", "save_draft")
+	}
+
+	if allowed("thunderbird_mail") {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "thunderbird_mail",
+			Description: "Thunderbird mail operations. Set `action` to one of the enum values. Read actions (list_accounts, list_folders, search_messages, get_message, list_recent) are always available; set_flags/move_message/delete_message require write access; send_mail/reply_message/forward_message/save_draft require THUNDERBIRD_ALLOW_SEND=true.",
+			InputSchema: mustSchema[MailInput](mailActions),
+		}, ThunderbirdMail)
+	}
+
+	if allowed("thunderbird_contacts") {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "thunderbird_contacts",
+			Description: "Thunderbird address book (read-only). action: search_contacts (by name/email substring) or get_contact (by exact email).",
+			InputSchema: mustSchema[ContactsInput]([]any{"search_contacts", "get_contact"}),
+		}, ThunderbirdContacts)
+	}
+
+	if allowed("thunderbird_calendar") {
+		mcp.AddTool(server, &mcp.Tool{
+			Name:        "thunderbird_calendar",
+			Description: "Thunderbird calendar (read-only). action: list_calendars or list_events (date range).",
+			InputSchema: mustSchema[CalendarInput]([]any{"list_calendars", "list_events"}),
+		}, ThunderbirdCalendar)
 	}
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {

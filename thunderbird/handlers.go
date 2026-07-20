@@ -23,6 +23,129 @@ func parseDate(s string) (time.Time, error) {
 	return time.Parse("2006-01-02", s)
 }
 
+// --- Consolidated domain tool dispatchers ---
+
+func ThunderbirdMail(ctx context.Context, req *mcp.CallToolRequest, in MailInput) (*mcp.CallToolResult, MailOutput, error) {
+	switch in.Action {
+	case "list_accounts":
+		_, o, err := ListAccounts(ctx, req, ListAccountsInput{})
+		return nil, MailOutput{Accounts: o.Accounts}, err
+	case "list_folders":
+		_, o, err := ListFolders(ctx, req, ListFoldersInput{Account: in.Account})
+		return nil, MailOutput{Folders: o.Folders}, err
+	case "search_messages":
+		_, o, err := SearchMessages(ctx, req, SearchMessagesInput{Query: in.Query, From: in.Sender, To: in.Recipient, Subject: in.Subject, Folder: in.Folder, Since: in.Since, Until: in.Until, Limit: in.Limit, Offset: in.Offset})
+		return nil, MailOutput{Messages: o.Messages, Count: o.Count}, err
+	case "get_message":
+		_, o, err := GetMessage(ctx, req, GetMessageInput{MessageRef: in.MessageRef, BodyFormat: in.BodyFormat})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Message: &o.Message}, nil
+	case "list_recent":
+		_, o, err := ListRecent(ctx, req, ListRecentInput{Folder: in.Folder, Limit: in.Limit})
+		return nil, MailOutput{Messages: o.Messages, Count: o.Count}, err
+	case "set_flags", "move_message", "delete_message":
+		if app.ReadOnly {
+			return nil, MailOutput{}, fmt.Errorf("action %q is disabled (THUNDERBIRD_READ_ONLY=true)", in.Action)
+		}
+		return mailMutate(ctx, req, in)
+	case "send_mail", "reply_message", "forward_message", "save_draft":
+		if app.ReadOnly || !app.AllowSend {
+			return nil, MailOutput{}, fmt.Errorf("action %q is disabled (set THUNDERBIRD_ALLOW_SEND=true)", in.Action)
+		}
+		return mailCompose(ctx, req, in)
+	default:
+		return nil, MailOutput{}, fmt.Errorf("unknown mail action %q", in.Action)
+	}
+}
+
+func mailMutate(ctx context.Context, req *mcp.CallToolRequest, in MailInput) (*mcp.CallToolResult, MailOutput, error) {
+	switch in.Action {
+	case "set_flags":
+		_, _, err := SetFlags(ctx, req, SetFlagsInput{MessageRef: in.MessageRef, Read: in.Read, Flagged: in.Flagged, AddTags: in.AddTags, RemoveTags: in.RemoveTags})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	case "move_message":
+		_, _, err := MoveMessage(ctx, req, MoveMessageInput{MessageRef: in.MessageRef, Destination: in.Destination})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	case "delete_message":
+		_, _, err := DeleteMessage(ctx, req, DeleteMessageInput{MessageRef: in.MessageRef, Permanent: in.Permanent})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	default:
+		return nil, MailOutput{}, fmt.Errorf("unknown mail action %q", in.Action)
+	}
+}
+
+func mailCompose(ctx context.Context, req *mcp.CallToolRequest, in MailInput) (*mcp.CallToolResult, MailOutput, error) {
+	switch in.Action {
+	case "send_mail":
+		_, _, err := SendMail(ctx, req, SendMailInput{From: in.From, To: in.To, Cc: in.Cc, Bcc: in.Bcc, Subject: in.Subject, Body: in.Body})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	case "reply_message":
+		_, _, err := ReplyMessage(ctx, req, ReplyMessageInput{MessageRef: in.MessageRef, From: in.From, Body: in.Body, ReplyAll: in.ReplyAll})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	case "forward_message":
+		_, _, err := ForwardMessage(ctx, req, ForwardMessageInput{MessageRef: in.MessageRef, From: in.From, To: in.To, Body: in.Body})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	case "save_draft":
+		_, _, err := SaveDraft(ctx, req, SaveDraftInput{From: in.From, To: in.To, Subject: in.Subject, Body: in.Body})
+		if err != nil {
+			return nil, MailOutput{}, err
+		}
+		return nil, MailOutput{Success: true}, nil
+	default:
+		return nil, MailOutput{}, fmt.Errorf("unknown mail action %q", in.Action)
+	}
+}
+
+func ThunderbirdContacts(ctx context.Context, req *mcp.CallToolRequest, in ContactsInput) (*mcp.CallToolResult, ContactsOutput, error) {
+	switch in.Action {
+	case "search_contacts":
+		_, o, err := SearchContacts(ctx, req, SearchContactsInput{Query: in.Query, Limit: in.Limit})
+		return nil, ContactsOutput{Contacts: o.Contacts, Count: o.Count}, err
+	case "get_contact":
+		_, o, err := GetContact(ctx, req, GetContactInput{Email: in.Email})
+		if err != nil {
+			return nil, ContactsOutput{}, err
+		}
+		c := o.Contact
+		return nil, ContactsOutput{Contact: &c, Found: o.Found}, nil
+	default:
+		return nil, ContactsOutput{}, fmt.Errorf("unknown contacts action %q", in.Action)
+	}
+}
+
+func ThunderbirdCalendar(ctx context.Context, req *mcp.CallToolRequest, in CalendarInput) (*mcp.CallToolResult, CalendarOutput, error) {
+	switch in.Action {
+	case "list_calendars":
+		_, o, err := ListCalendars(ctx, req, ListCalendarsInput{})
+		return nil, CalendarOutput{Calendars: o.Calendars}, err
+	case "list_events":
+		_, o, err := ListEvents(ctx, req, ListEventsInput{Since: in.Since, Until: in.Until, Limit: in.Limit})
+		return nil, CalendarOutput{Events: o.Events, Count: o.Count}, err
+	default:
+		return nil, CalendarOutput{}, fmt.Errorf("unknown calendar action %q", in.Action)
+	}
+}
+
 func ListAccounts(_ context.Context, _ *mcp.CallToolRequest, _ ListAccountsInput) (*mcp.CallToolResult, ListAccountsOutput, error) {
 	var out ListAccountsOutput
 	for _, a := range app.Config.Accounts {

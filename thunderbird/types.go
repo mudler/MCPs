@@ -302,3 +302,67 @@ type ListEventsOutput struct {
 	Events []CalendarEvent `json:"events"`
 	Count  int             `json:"count"`
 }
+
+// --- Consolidated domain tool I/O types ---
+
+type MailInput struct {
+	Action      string   `json:"action" jsonschema:"the mail operation to perform"`
+	Account     string   `json:"account,omitempty" jsonschema:"list_folders: restrict to this account key"`
+	Query       string   `json:"query,omitempty" jsonschema:"search_messages: free text over subject and indexed body"`
+	Sender      string   `json:"sender,omitempty" jsonschema:"search_messages: filter by sender"`
+	Recipient   string   `json:"recipient,omitempty" jsonschema:"search_messages: filter by recipient"`
+	Subject     string   `json:"subject,omitempty" jsonschema:"search_messages: subject filter; send_mail: the subject line"`
+	Folder      string   `json:"folder,omitempty" jsonschema:"search_messages/list_recent: folder URI to scope to"`
+	Since       string   `json:"since,omitempty" jsonschema:"search_messages: RFC3339 or YYYY-MM-DD lower bound"`
+	Until       string   `json:"until,omitempty" jsonschema:"search_messages: RFC3339 or YYYY-MM-DD upper bound"`
+	Limit       int      `json:"limit,omitempty"`
+	Offset      int      `json:"offset,omitempty"`
+	MessageRef  string   `json:"message_ref,omitempty" jsonschema:"get_message/set_flags/move_message/delete_message/reply_message/forward_message: reference from search_messages"`
+	BodyFormat  string   `json:"body_format,omitempty" jsonschema:"get_message: text (default) or html"`
+	Read        *bool    `json:"read,omitempty" jsonschema:"set_flags: mark read (true) or unread (false)"`
+	Flagged     *bool    `json:"flagged,omitempty" jsonschema:"set_flags: set or clear the star"`
+	AddTags     []string `json:"add_tags,omitempty" jsonschema:"set_flags: tags to add"`
+	RemoveTags  []string `json:"remove_tags,omitempty" jsonschema:"set_flags: tags to remove"`
+	Destination string   `json:"destination,omitempty" jsonschema:"move_message: destination folder in the same account"`
+	Permanent   bool     `json:"permanent,omitempty" jsonschema:"delete_message: permanently expunge instead of moving to Trash"`
+	From        string   `json:"from,omitempty" jsonschema:"send_mail/reply_message/forward_message: identity email to send as"`
+	To          []string `json:"to,omitempty" jsonschema:"send_mail/forward_message: recipients"`
+	Cc          []string `json:"cc,omitempty"`
+	Bcc         []string `json:"bcc,omitempty"`
+	Body        string   `json:"body,omitempty" jsonschema:"send_mail/reply_message/forward_message: message body"`
+	ReplyAll    bool     `json:"reply_all,omitempty" jsonschema:"reply_message: reply to all recipients"`
+}
+
+type MailOutput struct {
+	Accounts []AccountInfo    `json:"accounts,omitempty"`
+	Folders  []FolderInfo     `json:"folders,omitempty"`
+	Messages []MessageSummary `json:"messages,omitempty"`
+	Message  *MessageDetail   `json:"message,omitempty"`
+	Count    int              `json:"count,omitempty"`
+	Success  bool             `json:"success,omitempty"`
+}
+
+type ContactsInput struct {
+	Action string `json:"action" jsonschema:"search_contacts or get_contact"`
+	Query  string `json:"query,omitempty" jsonschema:"search_contacts: name or email substring"`
+	Email  string `json:"email,omitempty" jsonschema:"get_contact: exact email address"`
+	Limit  int    `json:"limit,omitempty"`
+}
+type ContactsOutput struct {
+	Contacts []Contact `json:"contacts,omitempty"`
+	Contact  *Contact  `json:"contact,omitempty"`
+	Found    bool      `json:"found,omitempty"`
+	Count    int       `json:"count,omitempty"`
+}
+
+type CalendarInput struct {
+	Action string `json:"action" jsonschema:"list_calendars or list_events"`
+	Since  string `json:"since,omitempty" jsonschema:"list_events: RFC3339 or YYYY-MM-DD; defaults to now"`
+	Until  string `json:"until,omitempty" jsonschema:"list_events: RFC3339 or YYYY-MM-DD; defaults to +30 days"`
+	Limit  int    `json:"limit,omitempty"`
+}
+type CalendarOutput struct {
+	Calendars []CalendarRef   `json:"calendars,omitempty"`
+	Events    []CalendarEvent `json:"events,omitempty"`
+	Count     int             `json:"count,omitempty"`
+}

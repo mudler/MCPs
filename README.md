@@ -1785,18 +1785,22 @@ Exposes a local Thunderbird profile's mail, contacts, and calendar. Search and r
 use Thunderbird's own index; mutations and sending use IMAP/SMTP with credentials
 decrypted from the profile.
 
-**Tools:**
-- `list_accounts`, `list_folders`
-- `search_messages`, `get_message`, `list_recent`
-- `set_flags`, `move_message`, `delete_message` (IMAP accounts only)
-- `send_mail`, `reply_message`, `forward_message`, `save_draft` (require `THUNDERBIRD_ALLOW_SEND=true`)
-- `search_contacts`, `get_contact`, `list_calendars`, `list_events`
+**Tools:** three domain tools, each selecting an operation via an `action` enum.
+- `thunderbird_mail` — `action`:
+  - read (always): `list_accounts`, `list_folders`, `search_messages`, `get_message`, `list_recent`
+  - mutate (IMAP accounts only, unless `THUNDERBIRD_READ_ONLY=true`): `set_flags`, `move_message`, `delete_message`
+  - compose (require `THUNDERBIRD_ALLOW_SEND=true`): `send_mail`, `reply_message`, `forward_message`, `save_draft`
+- `thunderbird_contacts` — `action`: `search_contacts`, `get_contact`
+- `thunderbird_calendar` — `action`: `list_calendars`, `list_events`
+
+The `action` enum is gated dynamically: disabled operations are omitted from the schema
+and also rejected by the handler as a backstop.
 
 **Configuration:**
 - `THUNDERBIRD_PROFILE` — path to the profile directory (auto-discovered if unset)
 - `THUNDERBIRD_READ_ONLY` — `true` disables all mutating and sending tools
 - `THUNDERBIRD_ALLOW_SEND` — `true` enables the compose/send tools (off by default)
-- `THUNDERBIRD_TOOLS` — comma-separated allowlist of tool names (default: all)
+- `THUNDERBIRD_TOOLS` — comma-separated allowlist of domain tool names (`thunderbird_mail`, `thunderbird_contacts`, `thunderbird_calendar`; default: all)
 
 **Notes:**
 - Local (POP/Local Folders) accounts are read-only.

@@ -11,6 +11,7 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/g8rswimmer/go-twitter/v2 v2.1.5
 	github.com/gofrs/flock v0.13.0
+	github.com/google/jsonschema-go v0.4.2
 	github.com/google/uuid v1.6.0
 	github.com/mkelcik/go-ha-client v1.0.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
@@ -52,7 +53,6 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
