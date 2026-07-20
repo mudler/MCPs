@@ -1,0 +1,35 @@
+{
+  "checks": [
+    { "message": "cua-driver 0.9.1", "name": "binary_version", "status": "pass" },
+    {
+      "data": { "architecture": "x86_64", "os_version": "Ubuntu 22.04.5 LTS" },
+      "message": "Ubuntu 22.04.5 LTS (x86_64)",
+      "name": "platform_supported",
+      "status": "pass"
+    },
+    { "message": "MCP session is active.", "name": "session_active", "status": "pass" },
+    { "message": "not applicable on Linux", "name": "bundle_identity", "status": "skip" },
+    { "message": "not applicable on Linux", "name": "tcc_accessibility", "status": "skip" },
+    { "message": "not applicable on Linux", "name": "tcc_screen_recording", "status": "skip" },
+    {
+      "hint": "DBUS_SESSION_BUS_ADDRESS is unset and none was auto-discovered, so there is no session bus to reach AT-SPI on — start the daemon inside the desktop session, or ensure a /run/user/<uid>/bus socket exists (the daemon adopts it at startup).",
+      "message": "X11 is reachable but AT-SPI (org.a11y.Bus) is not — UI inspection (get_window_state) will return empty trees; X11 input injection still works.",
+      "name": "ax_capability",
+      "status": "fail"
+    },
+    {
+      "message": "X11 reachable; screen capture path is functional.",
+      "name": "screen_capture_capability",
+      "status": "pass"
+    },
+    {
+      "message": "No WAYLAND_DISPLAY in the environment — not a Wayland session.",
+      "name": "wayland_backend",
+      "status": "skip"
+    }
+  ],
+  "driver_version": "0.9.1",
+  "overall": "degraded",
+  "platform": "linux",
+  "schema_version": "1"
+}

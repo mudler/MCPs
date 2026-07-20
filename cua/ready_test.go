@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -65,29 +66,86 @@ var _ = Describe("waitForDisplay", func() {
 	})
 })
 
+// loadStructured reads one of the captured health_report structuredContent
+// payloads from testdata and decodes it into the same `any` shape the go-sdk
+// hands probeDriverAX in CallToolResult.StructuredContent.
+func loadStructured(name string) any {
+	GinkgoHelper()
+	raw, err := os.ReadFile(filepath.Join("testdata", name))
+	Expect(err).NotTo(HaveOccurred())
+	var v any
+	Expect(json.Unmarshal(raw, &v)).To(Succeed())
+	return v
+}
+
 var _ = Describe("axReportHasCapability", func() {
-	// These specs pin the unknown-shape policy, not any guessed driver
-	// spelling: whatever the real report looks like, a body this function
-	// cannot affirmatively parse must count as no capability.
-	It("reports no capability for an empty body", func() {
-		Expect(axReportHasCapability("")).To(BeFalse())
+	// These three specs run against structuredContent captured verbatim from
+	// cua-driver 0.9.1 inside ghcr.io/mudler/mcps/cua:latest. They are
+	// behavioural assertions against real driver output, not guesses at a
+	// wire shape — see .superpowers/sdd/health-report-fixture.md.
+	Context("against captured driver output", func() {
+		It("reports a capability when AT-SPI is working", func() {
+			Expect(axReportHasCapability(loadStructured("health_report_atspi_working.json"))).To(BeTrue())
+		})
+
+		It("reports no capability when X11 is up but AT-SPI is unreachable", func() {
+			Expect(axReportHasCapability(loadStructured("health_report_atspi_unreachable.json"))).To(BeFalse())
+		})
+
+		It("reports no capability when there is no DISPLAY at all", func() {
+			Expect(axReportHasCapability(loadStructured("health_report_no_display.json"))).To(BeFalse())
+		})
+
+		// The two failing captures still carry overall "degraded", never
+		// "failed", because ax_capability is a non-core check. Keying on
+		// overall would be wrong in both directions; this pins that we do not.
+		It("does not key on the envelope's overall field", func() {
+			degraded := map[string]any{
+				"schema_version": "1",
+				"overall":        "degraded",
+				"checks": []any{
+					map[string]any{"name": "screen_capture_capability", "status": "fail", "message": "unrelated"},
+					map[string]any{"name": "ax_capability", "status": "pass", "message": "AT-SPI is fine"},
+				},
+			}
+			Expect(axReportHasCapability(degraded)).To(BeTrue())
+		})
 	})
 
-	It("reports no capability when the field is absent entirely", func() {
-		Expect(axReportHasCapability(`{"status":"ok","screens":1}`)).To(BeFalse())
-	})
+	// Policy for the degenerate cases. The tool declares no outputSchema, so
+	// anything we cannot affirmatively parse must fall to the safe side:
+	// no capability, meaning pixel-only addressing plus a warning.
+	Context("degenerate payloads", func() {
+		It("reports no capability when structuredContent is absent", func() {
+			Expect(axReportHasCapability(nil)).To(BeFalse())
+		})
 
-	It("reports no capability when the field's value does not parse", func() {
-		Expect(axReportHasCapability(`{"ax_capability":}`)).To(BeFalse())
-		Expect(axReportHasCapability(`ax_capability`)).To(BeFalse())
-		Expect(axReportHasCapability(`{"ax_capability": 42}`)).To(BeFalse())
-	})
+		It("reports no capability for a payload of the wrong shape", func() {
+			Expect(axReportHasCapability("not an object")).To(BeFalse())
+			Expect(axReportHasCapability(42)).To(BeFalse())
+			Expect(axReportHasCapability(map[string]any{"checks": "not an array"})).To(BeFalse())
+		})
 
-	// Same policy applied to the value vocabulary, which is as unobserved as
-	// the shape: a spelling we have not anticipated must fall to the safe
-	// side rather than read as a working capability.
-	It("reports no capability for an unrecognised value", func() {
-		Expect(axReportHasCapability(`{"ax_capability":"unsupported"}`)).To(BeFalse())
+		It("reports no capability when checks holds no ax_capability entry", func() {
+			Expect(axReportHasCapability(map[string]any{
+				"schema_version": "1",
+				"overall":        "ok",
+				"checks": []any{
+					map[string]any{"name": "binary_version", "status": "pass", "message": "cua-driver 0.9.1"},
+				},
+			})).To(BeFalse())
+		})
+
+		It("reports no capability for a skipped or unrecognised ax_capability status", func() {
+			for _, status := range []string{"fail", "skip", "", "unsupported"} {
+				Expect(axReportHasCapability(map[string]any{
+					"schema_version": "1",
+					"checks": []any{
+						map[string]any{"name": "ax_capability", "status": status},
+					},
+				})).To(BeFalse(), "status %q must not read as a working capability", status)
+			}
+		})
 	})
 })
 

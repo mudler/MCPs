@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
@@ -67,33 +67,78 @@ func waitForDisplay(ctx context.Context, display string, timeout time.Duration) 
 	return waitForDisplayAt(ctx, sock, timeout)
 }
 
-// axCapRe matches the driver's ax_capability field across JSON and plain-text
-// spellings, tolerating whitespace around the separator.
-var axCapRe = regexp.MustCompile(`ax_capability"?\s*[:=]\s*"?([a-z0-9_]+)`)
+// healthReport is the documented structuredContent payload of the driver's
+// health_report tool, schema_version "1". Only the fields we key on are
+// modelled; unknown fields and unknown check names are tolerated by design,
+// per the tool's own stability note.
+type healthReport struct {
+	SchemaVersion string             `json:"schema_version"`
+	Overall       string             `json:"overall"`
+	Checks        []healthReportItem `json:"checks"`
+}
 
-// axReportHasCapability reports whether a health_report body affirmatively
-// declares a working accessibility capability.
+type healthReportItem struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+// axCheckName is the canonical name of the accessibility check. It is present
+// on every platform cua-driver supports.
+const axCheckName = "ax_capability"
+
+// axReportHasCapability reports whether a health_report structuredContent
+// payload affirmatively declares a working accessibility capability.
 //
-// This is the one piece of unverified wire-shape knowledge in the server: it
-// was written from cua-driver's source, not from a live driver's output. It is
-// deliberately isolated and pure so it can be corrected against a captured
-// fixture without touching the probe's process handling. Anything it cannot
-// parse, and any value it does not recognise, counts as no capability — the
-// safe direction.
-func axReportHasCapability(body string) bool {
-	m := axCapRe.FindStringSubmatch(strings.ToLower(body))
-	if m == nil {
+// The shape here is not guessed: it was captured verbatim from cua-driver
+// 0.9.1 running inside ghcr.io/mudler/mcps/cua:latest. The three ground-truth
+// scenarios — AT-SPI working, X11 up but AT-SPI unreachable, and no DISPLAY at
+// all — together with the tool's own declared output contract are recorded in
+// .superpowers/sdd/health-report-fixture.md, which also documents how to
+// re-capture them against a newer driver.
+//
+// We key on checks[name == "ax_capability"].status == "pass" and nothing else:
+//
+//   - The status vocabulary is closed and small (pass | fail | skip), so an
+//     allowlist over it is genuinely exhaustive.
+//   - The envelope's "overall" field is deliberately NOT used. It aggregates
+//     every check, so an unrelated failure drags it to "degraded" while AT-SPI
+//     is perfectly fine; and because ax_capability is a non-core check it
+//     never reaches "failed" on AT-SPI's account — the no-DISPLAY capture
+//     reports only "degraded".
+//   - The prose TextContent is unusable: all three captured ax_capability
+//     messages lead with the token "X11" and the working and broken wordings
+//     differ by a single conjunction.
+//
+// The tool declares an inputSchema but no outputSchema, so structuredContent
+// is guaranteed only by its prose description. Anything this function cannot
+// affirmatively parse — a nil payload, a payload that does not re-marshal or
+// unmarshal, a checks array with no ax_capability entry, or any status other
+// than "pass" — counts as no capability. That is the safe direction: unknown
+// degrades computer_use to pixel-only addressing with a warning.
+//
+// It is kept pure and separately testable so a future driver change is a
+// one-function fix.
+func axReportHasCapability(structured any) bool {
+	if structured == nil {
 		return false
 	}
-	// An allowlist, not a denylist: the value vocabulary is exactly as
-	// unobserved as the shape, so an unanticipated negative spelling
-	// ("unsupported", "no", "error") must not read as a working capability.
-	switch m[1] {
-	case "atspi", "at_spi", "enabled", "available", "true", "yes", "ok":
-		return true
-	default:
+	// StructuredContent is an `any` in go-sdk v1.4.0; round-trip it through
+	// JSON rather than hand-rolling map type assertions.
+	raw, err := json.Marshal(structured)
+	if err != nil {
 		return false
 	}
+	var report healthReport
+	if err := json.Unmarshal(raw, &report); err != nil {
+		return false
+	}
+	for _, c := range report.Checks {
+		if c.Name == axCheckName {
+			return c.Status == "pass"
+		}
+	}
+	return false
 }
 
 // probeDriverAX spawns a short-lived cua-driver, asks it for a health report,
@@ -116,11 +161,7 @@ func probeDriverAX(ctx context.Context, cmd string, args []string) (bool, error)
 		return false, fmt.Errorf("health_report: %w", err)
 	}
 
-	var report strings.Builder
-	for _, c := range res.Content {
-		if t, ok := c.(*mcp.TextContent); ok {
-			report.WriteString(t.Text)
-		}
-	}
-	return axReportHasCapability(report.String()), nil
+	// A failing ax_capability check is reported inside the payload with
+	// isError false, so the result is read the same way either way.
+	return axReportHasCapability(res.StructuredContent), nil
 }
