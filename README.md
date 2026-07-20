@@ -1779,6 +1779,61 @@ mcp:
     }
 ```
 
+### 🐦 Thunderbird Server
+
+Exposes a local Thunderbird profile's mail, contacts, and calendar. Search and read
+use Thunderbird's own index; mutations and sending use IMAP/SMTP with credentials
+decrypted from the profile.
+
+**Tools:**
+- `list_accounts`, `list_folders`
+- `search_messages`, `get_message`, `list_recent`
+- `set_flags`, `move_message`, `delete_message` (IMAP accounts only)
+- `send_mail`, `reply_message`, `forward_message`, `save_draft` (require `THUNDERBIRD_ALLOW_SEND=true`)
+- `search_contacts`, `get_contact`, `list_calendars`, `list_events`
+
+**Configuration:**
+- `THUNDERBIRD_PROFILE` — path to the profile directory (auto-discovered if unset)
+- `THUNDERBIRD_READ_ONLY` — `true` disables all mutating and sending tools
+- `THUNDERBIRD_ALLOW_SEND` — `true` enables the compose/send tools (off by default)
+- `THUNDERBIRD_TOOLS` — comma-separated allowlist of tool names (default: all)
+
+**Notes:**
+- Local (POP/Local Folders) accounts are read-only.
+- Accounts using OAuth2 (many Gmail/Outlook setups) are not supported for live IMAP/SMTP;
+  they still appear in search results from the index.
+- A profile protected by a master password cannot have its credentials decrypted.
+
+**Docker image:**
+```bash
+docker run -i --rm \
+  -e THUNDERBIRD_PROFILE=/profile \
+  -v "$HOME/.thunderbird/xxxx.default-release:/profile:ro" \
+  ghcr.io/mudler/mcps/thunderbird:master
+```
+
+**LocalAI configuration (add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "thunderbird": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm", "--network", "host",
+            "-e", "THUNDERBIRD_PROFILE=/profile",
+            "-e", "THUNDERBIRD_ALLOW_SEND=false",
+            "-v", "/home/user/.thunderbird/xxxx.default-release:/profile:ro",
+            "ghcr.io/mudler/mcps/thunderbird:master"
+          ]
+        }
+      }
+    }
+```
+> `--network host` lets the container reach your IMAP/SMTP servers directly. Mounting
+> the profile read-only is recommended; the server never writes to profile files.
+
 ## Development
 
 ### Prerequisites

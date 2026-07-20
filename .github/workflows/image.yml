@@ -81,6 +81,9 @@ jobs:
           - mcp: github
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: thunderbird
+            dockerfile: ./Dockerfile
+            context: ./
     permissions:
       packages: write
       contents: read
