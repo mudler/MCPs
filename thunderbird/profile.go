@@ -215,10 +215,10 @@ func defaultProfileFromINI(iniPath, root string) (string, error) {
 	}
 
 	resolve := func(path, rel string) string {
-		if rel == "1" || filepath.IsAbs(path) {
-			return path
+		if rel == "1" {
+			return filepath.Join(root, path)
 		}
-		return filepath.Join(root, path)
+		return path
 	}
 	// Install section wins.
 	for _, s := range sections {

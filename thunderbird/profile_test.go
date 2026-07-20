@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -53,5 +54,26 @@ var _ = Describe("buildConfig", func() {
 		Expect(cfg.SMTP["smtp1"].Hostname).To(Equal("smtp.example.com"))
 		Expect(cfg.SMTP["smtp1"].Port).To(Equal(587))
 		Expect(cfg.SMTP["smtp1"].SocketType).To(Equal(2))
+	})
+})
+
+var _ = Describe("defaultProfileFromINI", func() {
+	It("joins a relative (IsRelative=1) profile path to the root", func() {
+		root := GinkgoT().TempDir()
+		iniPath := filepath.Join(root, "profiles.ini")
+		ini := "[General]\n" +
+			"StartWithLastProfile=1\n" +
+			"Version=2\n" +
+			"\n" +
+			"[Profile0]\n" +
+			"Name=default\n" +
+			"IsRelative=1\n" +
+			"Path=abcd.default\n" +
+			"Default=1\n"
+		Expect(os.WriteFile(iniPath, []byte(ini), 0o600)).To(Succeed())
+
+		got, err := defaultProfileFromINI(iniPath, root)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(got).To(Equal(filepath.Join(root, "abcd.default")))
 	})
 })

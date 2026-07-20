@@ -1,7 +1,7 @@
 package main
 
 // Config is the parsed Thunderbird profile configuration.
-// Populated by parseProfile in profile.go (Task 2).
+// Populated by loadProfile in profile.go (Task 2).
 type Config struct {
 	ProfileDir string
 	Accounts   []Account
