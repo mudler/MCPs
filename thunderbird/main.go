@@ -29,6 +29,10 @@ func allTools() []toolDef {
 		{&mcp.Tool{Name: "reply_message", Description: "Reply to a message, quoting the original and threading correctly. Requires THUNDERBIRD_ALLOW_SEND=true."}, ReplyMessage, "compose"},
 		{&mcp.Tool{Name: "forward_message", Description: "Forward a message to new recipients. Requires THUNDERBIRD_ALLOW_SEND=true."}, ForwardMessage, "compose"},
 		{&mcp.Tool{Name: "save_draft", Description: "Save a draft to the Drafts folder (visible in Thunderbird). Requires THUNDERBIRD_ALLOW_SEND=true."}, SaveDraft, "compose"},
+		{&mcp.Tool{Name: "search_contacts", Description: "Search the Thunderbird address book by name or email substring."}, SearchContacts, "read"},
+		{&mcp.Tool{Name: "get_contact", Description: "Get a single contact by exact email address."}, GetContact, "read"},
+		{&mcp.Tool{Name: "list_calendars", Description: "List the calendars registered in Thunderbird."}, ListCalendars, "read"},
+		{&mcp.Tool{Name: "list_events", Description: "List calendar events in a date range (defaults to the next 30 days)."}, ListEvents, "read"},
 	}
 }
 
@@ -71,6 +75,14 @@ func registerTool(server *mcp.Server, td toolDef) {
 	case func(context.Context, *mcp.CallToolRequest, ForwardMessageInput) (*mcp.CallToolResult, ForwardMessageOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	case func(context.Context, *mcp.CallToolRequest, SaveDraftInput) (*mcp.CallToolResult, SaveDraftOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, SearchContactsInput) (*mcp.CallToolResult, SearchContactsOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, GetContactInput) (*mcp.CallToolResult, GetContactOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ListCalendarsInput) (*mcp.CallToolResult, ListCalendarsOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ListEventsInput) (*mcp.CallToolResult, ListEventsOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	default:
 		log.Fatalf("no registration case for tool %s", td.tool.Name)

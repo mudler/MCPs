@@ -355,3 +355,56 @@ func listLocalFolders(a *Account) []FolderInfo {
 	})
 	return out
 }
+
+// --- Contacts + calendar tools (Task 13) ---
+
+func SearchContacts(_ context.Context, _ *mcp.CallToolRequest, in SearchContactsInput) (*mcp.CallToolResult, SearchContactsOutput, error) {
+	if app.Contacts == nil {
+		return nil, SearchContactsOutput{}, fmt.Errorf("no address book available")
+	}
+	res, err := app.Contacts.Search(in.Query, in.Limit)
+	if err != nil {
+		return nil, SearchContactsOutput{}, err
+	}
+	return nil, SearchContactsOutput{Contacts: res, Count: len(res)}, nil
+}
+
+func GetContact(_ context.Context, _ *mcp.CallToolRequest, in GetContactInput) (*mcp.CallToolResult, GetContactOutput, error) {
+	if app.Contacts == nil {
+		return nil, GetContactOutput{}, fmt.Errorf("no address book available")
+	}
+	c, found, err := app.Contacts.Get(in.Email)
+	if err != nil {
+		return nil, GetContactOutput{}, err
+	}
+	return nil, GetContactOutput{Contact: c, Found: found}, nil
+}
+
+func ListCalendars(_ context.Context, _ *mcp.CallToolRequest, _ ListCalendarsInput) (*mcp.CallToolResult, ListCalendarsOutput, error) {
+	return nil, ListCalendarsOutput{Calendars: app.Config.Calendars}, nil
+}
+
+func ListEvents(_ context.Context, _ *mcp.CallToolRequest, in ListEventsInput) (*mcp.CallToolResult, ListEventsOutput, error) {
+	if app.Calendar == nil {
+		return nil, ListEventsOutput{}, fmt.Errorf("no calendar available")
+	}
+	since, err := parseDate(in.Since)
+	if err != nil {
+		return nil, ListEventsOutput{}, fmt.Errorf("invalid since: %w", err)
+	}
+	until, err := parseDate(in.Until)
+	if err != nil {
+		return nil, ListEventsOutput{}, fmt.Errorf("invalid until: %w", err)
+	}
+	if since.IsZero() {
+		since = fixedNow()
+	}
+	if until.IsZero() {
+		until = since.AddDate(0, 0, 30)
+	}
+	res, err := app.Calendar.Events(since, until, in.Limit)
+	if err != nil {
+		return nil, ListEventsOutput{}, err
+	}
+	return nil, ListEventsOutput{Events: res, Count: len(res)}, nil
+}

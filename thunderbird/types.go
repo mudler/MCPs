@@ -268,3 +268,37 @@ type CalendarEvent struct {
 	Start    time.Time `json:"start"`
 	End      time.Time `json:"end"`
 }
+
+// --- Contacts + calendar tools (Task 13) ---
+
+type SearchContactsInput struct {
+	Query string `json:"query" jsonschema:"name or email substring"`
+	Limit int    `json:"limit,omitempty"`
+}
+type SearchContactsOutput struct {
+	Contacts []Contact `json:"contacts"`
+	Count    int       `json:"count"`
+}
+
+type GetContactInput struct {
+	Email string `json:"email"`
+}
+type GetContactOutput struct {
+	Contact Contact `json:"contact"`
+	Found   bool    `json:"found"`
+}
+
+type ListCalendarsInput struct{}
+type ListCalendarsOutput struct {
+	Calendars []CalendarRef `json:"calendars"`
+}
+
+type ListEventsInput struct {
+	Since string `json:"since,omitempty" jsonschema:"RFC3339 or YYYY-MM-DD; defaults to now"`
+	Until string `json:"until,omitempty" jsonschema:"RFC3339 or YYYY-MM-DD; defaults to 30 days out"`
+	Limit int    `json:"limit,omitempty"`
+}
+type ListEventsOutput struct {
+	Events []CalendarEvent `json:"events"`
+	Count  int             `json:"count"`
+}

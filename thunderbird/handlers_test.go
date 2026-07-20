@@ -53,3 +53,34 @@ var _ = Describe("Mutate handlers reject local folders", func() {
 })
 
 func ptr[T any](v T) *T { return &v }
+
+var _ = Describe("Contacts and calendar handlers", func() {
+	BeforeEach(func() {
+		app = &App{Config: &Config{Calendars: []CalendarRef{{UUID: "cal-uuid-1", Name: "Home", Type: "storage"}}}}
+		c, err := openContactsAt(seedDB("testdata/abook_seed.sql"))
+		Expect(err).NotTo(HaveOccurred())
+		app.Contacts = c
+		cal, err := openCalendarAt(seedDB("testdata/calendar_seed.sql"), map[string]string{"cal-uuid-1": "Home"})
+		Expect(err).NotTo(HaveOccurred())
+		app.Calendar = cal
+	})
+	It("search_contacts finds by substring", func() {
+		_, out, err := SearchContacts(context.Background(), nil, SearchContactsInput{Query: "carol"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out.Count).To(Equal(1))
+		Expect(out.Contacts[0].Email).To(Equal("carol@example.com"))
+	})
+	It("list_events returns events in the default window", func() {
+		_, out, err := ListEvents(context.Background(), nil, ListEventsInput{
+			Since: "2023-11-01", Until: "2023-12-01",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out.Count).To(Equal(2))
+	})
+	It("list_calendars lists registered calendars", func() {
+		_, out, err := ListCalendars(context.Background(), nil, ListCalendarsInput{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out.Calendars).To(HaveLen(1))
+		Expect(out.Calendars[0].Name).To(Equal("Home"))
+	})
+})
