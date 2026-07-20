@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"strings"
 )
@@ -59,4 +60,14 @@ func loadAppFromConfig(cfg *Config, creds *Credentials, readOnly, allowSend bool
 
 func (a *App) folderIsLocal(folderURI string) bool {
 	return strings.HasPrefix(folderURI, "mailbox://")
+}
+
+func (a *App) localAccountFor(folderURI string) (*Account, error) {
+	for i := range a.Config.Accounts {
+		acct := &a.Config.Accounts[i]
+		if acct.IsLocal() {
+			return acct, nil
+		}
+	}
+	return nil, fmt.Errorf("no local account for %q", folderURI)
 }

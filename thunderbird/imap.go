@@ -190,6 +190,40 @@ func (m *IMAP) Append(folder string, raw []byte, flags []imap.Flag) error {
 	return c.Logout().Wait()
 }
 
+func (m *IMAP) listIMAPFolders(a *Account) ([]FolderInfo, error) {
+	c, err := m.connect(a)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	listCmd := c.List("", "*", &imap.ListOptions{
+		ReturnStatus: &imap.StatusOptions{NumMessages: true, NumUnseen: true},
+	})
+	data, err := listCmd.Collect()
+	if err != nil {
+		return nil, err
+	}
+	var out []FolderInfo
+	for _, d := range data {
+		fi := FolderInfo{
+			Name:    d.Mailbox,
+			URI:     "imap://" + a.Username + "@" + a.Hostname + "/" + d.Mailbox,
+			Account: a.Key,
+		}
+		if d.Status != nil {
+			if d.Status.NumMessages != nil {
+				fi.Total = int(*d.Status.NumMessages)
+			}
+			if d.Status.NumUnseen != nil {
+				fi.Unread = int(*d.Status.NumUnseen)
+			}
+		}
+		out = append(out, fi)
+	}
+	_ = c.Logout().Wait()
+	return out, nil
+}
+
 func (m *IMAP) appendAccount(folder string) (*Account, error) {
 	if strings.Contains(folder, "://") {
 		return m.accountForFolderURI(folder)

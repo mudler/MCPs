@@ -15,7 +15,15 @@ type toolDef struct {
 	category string // "read", "mutate", "compose"
 }
 
-func allTools() []toolDef { return nil } // filled in later tasks
+func allTools() []toolDef {
+	return []toolDef{
+		{&mcp.Tool{Name: "list_accounts", Description: "List Thunderbird mail accounts, their type, and the identities (email addresses) you may send as. Local (POP/Local Folders) accounts are read-only."}, ListAccounts, "read"},
+		{&mcp.Tool{Name: "list_folders", Description: "List mail folders with unread/total counts. Returns folder URIs used as the folder filter in search and as move destinations."}, ListFolders, "read"},
+		{&mcp.Tool{Name: "search_messages", Description: "Search mail via Thunderbird's index. Filter by query text, from, to, subject, folder URI, and date range. Returns message references."}, SearchMessages, "read"},
+		{&mcp.Tool{Name: "get_message", Description: "Fetch a full message (headers, body, attachment list) by the message_ref from search_messages or list_recent."}, GetMessage, "read"},
+		{&mcp.Tool{Name: "list_recent", Description: "List the most recent messages, optionally within a folder URI."}, ListRecent, "read"},
+	}
+}
 
 func parseToolFilter(env string) map[string]bool {
 	if env == "" || env == "all" {
@@ -32,7 +40,20 @@ func parseToolFilter(env string) map[string]bool {
 
 func registerTool(server *mcp.Server, td toolDef) {
 	// Typed switch added as handlers are implemented (mirrors jellyfin).
-	log.Fatalf("no registration case for tool %s", td.tool.Name)
+	switch h := td.handler.(type) {
+	case func(context.Context, *mcp.CallToolRequest, ListAccountsInput) (*mcp.CallToolResult, ListAccountsOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ListFoldersInput) (*mcp.CallToolResult, ListFoldersOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, SearchMessagesInput) (*mcp.CallToolResult, SearchMessagesOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, GetMessageInput) (*mcp.CallToolResult, GetMessageOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ListRecentInput) (*mcp.CallToolResult, ListRecentOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	default:
+		log.Fatalf("no registration case for tool %s", td.tool.Name)
+	}
 }
 
 func main() {
