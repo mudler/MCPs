@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	. "github.com/onsi/ginkgo/v2"
@@ -13,11 +14,20 @@ import (
 // returning a text part plus a PNG image part, and returns a connected
 // upstream pointed at it.
 func fakeUpstream(ctx context.Context, name string, png []byte, toolNames ...string) *upstream {
+	return fakeUpstreamCapturing(ctx, name, png, nil, toolNames...)
+}
+
+// fakeUpstreamCapturing is fakeUpstream with an optional hook invoked with the
+// raw argument bytes each tool call arrives with.
+func fakeUpstreamCapturing(ctx context.Context, name string, png []byte, capture func(json.RawMessage), toolNames ...string) *upstream {
 	srv := mcp.NewServer(&mcp.Implementation{Name: name, Version: "v0"}, nil)
 	for _, tn := range toolNames {
 		srv.AddTool(
 			&mcp.Tool{Name: tn, Description: "fake " + tn, InputSchema: map[string]any{"type": "object"}},
 			func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				if capture != nil {
+					capture(req.Params.Arguments)
+				}
 				return &mcp.CallToolResult{Content: []mcp.Content{
 					&mcp.TextContent{Text: "called " + req.Params.Name},
 					&mcp.ImageContent{MIMEType: "image/png", Data: png},
@@ -107,6 +117,27 @@ var _ = Describe("aggregate", func() {
 		text, ok := res.Content[0].(*mcp.TextContent)
 		Expect(ok).To(BeTrue())
 		Expect(text.Text).To(Equal("called browser_navigate"))
+	})
+
+	// Round-tripping arguments through json.Unmarshal into `any` turns every
+	// JSON number into a float64, which silently mangles integers past 2^53.
+	It("forwards large JSON integers without precision loss", func() {
+		var got json.RawMessage
+		ups := []*upstream{
+			fakeUpstreamCapturing(ctx, "browser", png, func(raw json.RawMessage) {
+				got = append(json.RawMessage(nil), raw...)
+			}, "browser_navigate"),
+		}
+		cs := connectToAggregator(ctx, ups, nil)
+
+		// 2^53 + 1: the smallest positive integer a float64 cannot represent.
+		_, err := cs.CallTool(ctx, &mcp.CallToolParams{
+			Name:      "browser_navigate",
+			Arguments: json.RawMessage(`{"id":9007199254740993}`),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(got)).To(ContainSubstring("9007199254740993"),
+			"upstream must observe the integer verbatim, not a float64 approximation")
 	})
 
 	It("drops tools that are not in a non-empty allowlist", func() {

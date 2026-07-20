@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,15 +60,12 @@ func aggregate(ctx context.Context, srv *mcp.Server, ups []*upstream, allow map[
 
 			session := u.session // capture per iteration
 			srv.AddTool(tool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				var args any
-				if len(req.Params.Arguments) > 0 {
-					if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
-						return nil, fmt.Errorf("decode arguments for %s: %w", req.Params.Name, err)
-					}
-				}
+				// Arguments is a json.RawMessage, which marshals verbatim.
+				// Forwarding the raw bytes keeps the request direction as
+				// lossless as the response direction.
 				return session.CallTool(ctx, &mcp.CallToolParams{
 					Name:      req.Params.Name,
-					Arguments: args,
+					Arguments: req.Params.Arguments,
 				})
 			})
 		}
