@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	nibmcp "github.com/mudler/nib/mcp"
 	"github.com/mudler/xlog"
@@ -48,7 +49,9 @@ func main() {
 		log.Fatalf("tool aggregation failed: %v", err)
 	}
 
-	if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
+	// Run returns ctx.Err() on a clean shutdown, so a SIGTERM would otherwise
+	// exit non-zero and read as a crash to any supervisor.
+	if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatalf("server error: %v", err)
 	}
 }
@@ -59,10 +62,77 @@ func main() {
 // os.Stdout. For a stdio MCP server stdout is the JSON-RPC channel, so a single
 // nib log line lands in the middle of the protocol stream and breaks the client
 // before the first message is exchanged. Only the destination is overridden:
-// the level still honours COGITO_LOG_LEVEL exactly as xlog's own default does.
+// the level still honours COGITO_LOG_LEVEL and the format still honours
+// LOG_FORMAT, exactly as xlog's own default logger does.
 func redirectNibLogsToStderr() {
-	level := xlog.LogLevel(os.Getenv("COGITO_LOG_LEVEL")).ToSlogLevel()
-	xlog.SetLogger(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+	opts := &slog.HandlerOptions{Level: xlog.LogLevel(os.Getenv("COGITO_LOG_LEVEL")).ToSlogLevel()}
+
+	// xlog compares LOG_FORMAT literally against "json" (xlog.NewLogger), so
+	// match that rather than being more permissive.
+	var handler slog.Handler
+	if os.Getenv("LOG_FORMAT") == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	}
+	xlog.SetLogger(slog.New(handler))
+}
+
+// startUpstream runs one nib MCP server on an in-memory transport and connects
+// a client session to it.
+//
+// nib's entrypoints can return an error *before* they begin serving — a driver
+// that fails to connect, for example. In that case the server end of the pair
+// is never connected and never closed, so a bare connectUpstream would block on
+// the initialize round-trip forever. Racing the serve error against the connect,
+// under a timeout, turns that hang into a reported failure.
+func startUpstream(ctx context.Context, name string, timeout time.Duration, serve func(mcp.Transport) error) (*upstream, error) {
+	serverT, clientT := mcp.NewInMemoryTransports()
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- serve(serverT) }()
+
+	connCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	type result struct {
+		u   *upstream
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		u, err := connectUpstream(connCtx, name, clientT)
+		done <- result{u, err}
+	}()
+
+	select {
+	case err := <-serveErr:
+		// Only a pre-serve return lands here first; a healthy server blocks in
+		// Run until ctx ends.
+		if err == nil {
+			err = fmt.Errorf("returned before serving")
+		}
+		return nil, fmt.Errorf("%s server: %w", name, err)
+	case r := <-done:
+		if r.err != nil {
+			return nil, r.err
+		}
+		go func() {
+			if err := <-serveErr; err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("%s server error: %v", name, err)
+			}
+		}()
+		return r.u, nil
+	}
+}
+
+// closeUpstreams releases sessions established before a later failure.
+func closeUpstreams(ups []*upstream) {
+	for _, u := range ups {
+		if u.session != nil {
+			u.session.Close()
+		}
+	}
 }
 
 // startUpstreams launches the enabled nib MCP servers on in-memory transports
@@ -96,13 +166,9 @@ func startUpstreams(ctx context.Context, cfg Config) ([]*upstream, error) {
 				"Check that at-spi2-core is installed and a session D-Bus is running.")
 		}
 
-		serverT, clientT := mcp.NewInMemoryTransports()
-		go func() {
-			if err := nibmcp.StartComputerMCPServer(ctx, serverT, cfg.NibConfig); err != nil {
-				log.Printf("computer server error: %v", err)
-			}
-		}()
-		u, err := connectUpstream(ctx, "computer", clientT)
+		u, err := startUpstream(ctx, "computer", cfg.ReadyTimeout, func(t mcp.Transport) error {
+			return nibmcp.StartComputerMCPServer(ctx, t, cfg.NibConfig)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -110,14 +176,11 @@ func startUpstreams(ctx context.Context, cfg Config) ([]*upstream, error) {
 	}
 
 	if cfg.NibConfig.Browser.Enabled {
-		serverT, clientT := mcp.NewInMemoryTransports()
-		go func() {
-			if err := nibmcp.StartBrowserMCPServer(ctx, serverT, cfg.NibConfig); err != nil {
-				log.Printf("browser server error: %v", err)
-			}
-		}()
-		u, err := connectUpstream(ctx, "browser", clientT)
+		u, err := startUpstream(ctx, "browser", cfg.ReadyTimeout, func(t mcp.Transport) error {
+			return nibmcp.StartBrowserMCPServer(ctx, t, cfg.NibConfig)
+		})
 		if err != nil {
+			closeUpstreams(ups)
 			return nil, err
 		}
 		ups = append(ups, u)
