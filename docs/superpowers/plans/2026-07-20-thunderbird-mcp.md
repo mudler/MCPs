@@ -605,10 +605,10 @@ func defaultProfileFromINI(iniPath, root string) (string, error) {
 	}
 
 	resolve := func(path, rel string) string {
-		if rel == "1" || filepath.IsAbs(path) {
-			return path
+		if rel == "1" { // IsRelative=1: Path is relative to the profiles.ini dir
+			return filepath.Join(root, path)
 		}
-		return filepath.Join(root, path)
+		return path
 	}
 	// Install section wins.
 	for _, s := range sections {
@@ -1509,6 +1509,11 @@ func NewIMAP(cfg *Config, creds *Credentials) *IMAP { return &IMAP{cfg: cfg, cre
 func (a Account) hostPort() string { return net.JoinHostPort(a.Hostname, strconv.Itoa(a.Port)) }
 
 func (m *IMAP) accountForFolderURI(uri string) (*Account, error) {
+	// Check local folders first: real mailbox:// URIs (e.g. Local%20Folders)
+	// make url.Parse error, so this must precede it to return the friendly message.
+	if strings.HasPrefix(uri, "mailbox://") {
+		return nil, fmt.Errorf("folder %q is in a local (non-IMAP) account and is read-only", uri)
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("bad folder uri %q: %w", uri, err)
@@ -1519,9 +1524,6 @@ func (m *IMAP) accountForFolderURI(uri string) (*Account, error) {
 		if a.Type == "imap" && a.Hostname == host {
 			return a, nil
 		}
-	}
-	if strings.HasPrefix(uri, "mailbox://") {
-		return nil, fmt.Errorf("folder %q is in a local (non-IMAP) account and is read-only", uri)
 	}
 	return nil, fmt.Errorf("no IMAP account matches folder %q", uri)
 }
