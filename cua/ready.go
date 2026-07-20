@@ -69,7 +69,7 @@ func waitForDisplay(ctx context.Context, display string, timeout time.Duration) 
 
 // axCapRe matches the driver's ax_capability field across JSON and plain-text
 // spellings, tolerating whitespace around the separator.
-var axCapRe = regexp.MustCompile(`ax_capability"?\s*[:=]\s*"?([a-z_]+)`)
+var axCapRe = regexp.MustCompile(`ax_capability"?\s*[:=]\s*"?([a-z0-9_]+)`)
 
 // axReportHasCapability reports whether a health_report body affirmatively
 // declares a working accessibility capability.
@@ -78,17 +78,21 @@ var axCapRe = regexp.MustCompile(`ax_capability"?\s*[:=]\s*"?([a-z_]+)`)
 // was written from cua-driver's source, not from a live driver's output. It is
 // deliberately isolated and pure so it can be corrected against a captured
 // fixture without touching the probe's process handling. Anything it cannot
-// parse counts as no capability — the safe direction.
+// parse, and any value it does not recognise, counts as no capability — the
+// safe direction.
 func axReportHasCapability(body string) bool {
 	m := axCapRe.FindStringSubmatch(strings.ToLower(body))
 	if m == nil {
 		return false
 	}
+	// An allowlist, not a denylist: the value vocabulary is exactly as
+	// unobserved as the shape, so an unanticipated negative spelling
+	// ("unsupported", "no", "error") must not read as a working capability.
 	switch m[1] {
-	case "none", "unavailable", "null", "false", "disabled":
-		return false
-	default:
+	case "atspi", "at_spi", "enabled", "available", "true", "yes", "ok":
 		return true
+	default:
+		return false
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("waitForDisplay", func() {
+var _ = Describe("waitForDisplayAt", func() {
 	var ctx context.Context
 
 	BeforeEach(func() { ctx = context.Background() })
@@ -55,10 +55,12 @@ var _ = Describe("waitForDisplay", func() {
 		err = waitForDisplayAt(cctx, filepath.Join(dir, "X99"), 10*time.Second)
 		Expect(err).To(MatchError(context.Canceled))
 	})
+})
 
+var _ = Describe("waitForDisplay", func() {
 	It("accepts a display it cannot poll without waiting", func() {
 		start := time.Now()
-		Expect(waitForDisplay(ctx, "host:1", time.Millisecond)).To(Succeed())
+		Expect(waitForDisplay(context.Background(), "host:1", time.Millisecond)).To(Succeed())
 		Expect(time.Since(start)).To(BeNumerically("<", time.Second))
 	})
 })
@@ -79,6 +81,13 @@ var _ = Describe("axReportHasCapability", func() {
 		Expect(axReportHasCapability(`{"ax_capability":}`)).To(BeFalse())
 		Expect(axReportHasCapability(`ax_capability`)).To(BeFalse())
 		Expect(axReportHasCapability(`{"ax_capability": 42}`)).To(BeFalse())
+	})
+
+	// Same policy applied to the value vocabulary, which is as unobserved as
+	// the shape: a spelling we have not anticipated must fall to the safe
+	// side rather than read as a working capability.
+	It("reports no capability for an unrecognised value", func() {
+		Expect(axReportHasCapability(`{"ax_capability":"unsupported"}`)).To(BeFalse())
 	})
 })
 
