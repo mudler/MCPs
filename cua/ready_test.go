@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -37,6 +38,59 @@ var _ = Describe("waitForDisplay", func() {
 		err = waitForDisplayAt(ctx, filepath.Join(dir, "X99"), 300*time.Millisecond)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("timed out"))
+	})
+
+	It("returns the context error when the wait is cancelled", func() {
+		dir, err := os.MkdirTemp("", "x11-*")
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(os.RemoveAll, dir)
+
+		cctx, cancel := context.WithCancel(ctx)
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			cancel()
+		}()
+		DeferCleanup(cancel)
+
+		err = waitForDisplayAt(cctx, filepath.Join(dir, "X99"), 10*time.Second)
+		Expect(err).To(MatchError(context.Canceled))
+	})
+
+	It("accepts a display it cannot poll without waiting", func() {
+		start := time.Now()
+		Expect(waitForDisplay(ctx, "host:1", time.Millisecond)).To(Succeed())
+		Expect(time.Since(start)).To(BeNumerically("<", time.Second))
+	})
+})
+
+var _ = Describe("axReportHasCapability", func() {
+	// These specs pin the unknown-shape policy, not any guessed driver
+	// spelling: whatever the real report looks like, a body this function
+	// cannot affirmatively parse must count as no capability.
+	It("reports no capability for an empty body", func() {
+		Expect(axReportHasCapability("")).To(BeFalse())
+	})
+
+	It("reports no capability when the field is absent entirely", func() {
+		Expect(axReportHasCapability(`{"status":"ok","screens":1}`)).To(BeFalse())
+	})
+
+	It("reports no capability when the field's value does not parse", func() {
+		Expect(axReportHasCapability(`{"ax_capability":}`)).To(BeFalse())
+		Expect(axReportHasCapability(`ax_capability`)).To(BeFalse())
+		Expect(axReportHasCapability(`{"ax_capability": 42}`)).To(BeFalse())
+	})
+})
+
+var _ = Describe("probeDriverAX", func() {
+	It("marks a driver that cannot be started as unavailable", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		DeferCleanup(cancel)
+
+		ok, err := probeDriverAX(ctx, "/nonexistent/cua-driver-does-not-exist", nil)
+		Expect(ok).To(BeFalse())
+		Expect(err).To(HaveOccurred())
+		Expect(errors.Is(err, errDriverUnavailable)).To(BeTrue())
 	})
 })
 

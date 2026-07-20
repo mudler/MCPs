@@ -2,15 +2,23 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// errDriverUnavailable marks a probe failure that means the driver could not
+// be started at all, as opposed to one that merely left its AT-SPI capability
+// undetermined. Task 4 treats the former as fatal and the latter as a
+// degradation to pixel-only addressing.
+var errDriverUnavailable = errors.New("cua-driver unavailable")
 
 // displaySocketPath maps a local DISPLAY value such as ":1" or ":1.0" to its
 // Unix socket path. It returns "" for remote or malformed displays.
@@ -59,21 +67,29 @@ func waitForDisplay(ctx context.Context, display string, timeout time.Duration) 
 	return waitForDisplayAt(ctx, sock, timeout)
 }
 
-// axReportHasCapability reports whether a cua-driver health_report body
-// advertises a usable AT-SPI accessibility capability.
+// axCapRe matches the driver's ax_capability field across JSON and plain-text
+// spellings, tolerating whitespace around the separator.
+var axCapRe = regexp.MustCompile(`ax_capability"?\s*[:=]\s*"?([a-z_]+)`)
+
+// axReportHasCapability reports whether a health_report body affirmatively
+// declares a working accessibility capability.
 //
-// The driver reports capabilities as text, so this is a string match rather
-// than a schema decode: the exact shape of the report is not pinned by the
-// driver's protocol. An absent mention and an explicit "none" both mean no
-// AT-SPI. Keep this the single place that knows the report's wire shape, so
-// that correcting it against a live driver is a one-function change.
-func axReportHasCapability(report string) bool {
-	body := strings.ToLower(report)
-	if !strings.Contains(body, "ax_capability") {
+// This is the one piece of unverified wire-shape knowledge in the server: it
+// was written from cua-driver's source, not from a live driver's output. It is
+// deliberately isolated and pure so it can be corrected against a captured
+// fixture without touching the probe's process handling. Anything it cannot
+// parse counts as no capability — the safe direction.
+func axReportHasCapability(body string) bool {
+	m := axCapRe.FindStringSubmatch(strings.ToLower(body))
+	if m == nil {
 		return false
 	}
-	return !strings.Contains(body, `"ax_capability":"none"`) &&
-		!strings.Contains(body, `"ax_capability": "none"`)
+	switch m[1] {
+	case "none", "unavailable", "null", "false", "disabled":
+		return false
+	default:
+		return true
+	}
 }
 
 // probeDriverAX spawns a short-lived cua-driver, asks it for a health report,
@@ -87,7 +103,7 @@ func probeDriverAX(ctx context.Context, cmd string, args []string) (bool, error)
 	client := mcp.NewClient(&mcp.Implementation{Name: "cua-probe", Version: version}, nil)
 	sess, err := client.Connect(ctx, &mcp.CommandTransport{Command: child}, nil)
 	if err != nil {
-		return false, fmt.Errorf("start %s: %w", cmd, err)
+		return false, fmt.Errorf("%w: start %s: %w", errDriverUnavailable, cmd, err)
 	}
 	defer sess.Close()
 
