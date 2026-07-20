@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/dghubble/oauth1 v0.7.3
+	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/g8rswimmer/go-twitter/v2 v2.1.5
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
@@ -44,6 +45,8 @@ require (
 	github.com/blevesearch/zapx/v16 v16.2.8 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/emersion/go-message v0.18.2 // indirect
+	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
