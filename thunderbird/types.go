@@ -114,3 +114,20 @@ type Identity struct {
 
 // IsLocal reports whether the account stores mail on disk (read-only for us).
 func (a Account) IsLocal() bool { return a.Type == "pop3" || a.Type == "none" }
+
+// Contact is an address-book entry from abook.sqlite.
+type Contact struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Nickname string `json:"nickname,omitempty"`
+}
+
+// CalendarEvent is a calendar item from calendar-data/local.sqlite.
+type CalendarEvent struct {
+	ID       string    `json:"id"`
+	Calendar string    `json:"calendar"`
+	Title    string    `json:"title"`
+	Location string    `json:"location,omitempty"`
+	Start    time.Time `json:"start"`
+	End      time.Time `json:"end"`
+}
