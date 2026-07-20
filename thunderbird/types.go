@@ -5,6 +5,25 @@ package main
 type Config struct {
 	ProfileDir string
 	Accounts   []Account
+	SMTP       map[string]SMTPServer
+	Calendars  []CalendarRef
+}
+
+// SMTPServer is one configured outgoing (SMTP) server.
+type SMTPServer struct {
+	Key, Hostname string
+	Port          int
+	SocketType    int
+	AuthMethod    int
+	Username      string
+}
+
+// CalendarRef is a calendar registered in the profile.
+type CalendarRef struct {
+	UUID string
+	Name string
+	Type string // "storage", "caldav", ...
+	URI  string
 }
 
 // Account is one Thunderbird mail account.
