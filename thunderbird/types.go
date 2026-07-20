@@ -40,6 +40,28 @@ type MessageSummary struct {
 	Date    time.Time `json:"date"`
 }
 
+// MessageDetail is a fully-fetched message (body + attachments metadata).
+type MessageDetail struct {
+	Ref         string       `json:"message_ref"`
+	Subject     string       `json:"subject"`
+	Author      string       `json:"author"`
+	To          []string     `json:"to"`
+	Cc          []string     `json:"cc"`
+	Date        time.Time    `json:"date"`
+	MessageID   string       `json:"message_id"`
+	References  string       `json:"references"`
+	BodyText    string       `json:"body_text"`
+	BodyHTML    string       `json:"body_html,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// Attachment describes one message attachment (metadata only).
+type Attachment struct {
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	Size        int    `json:"size"`
+}
+
 // Config is the parsed Thunderbird profile configuration.
 // Populated by loadProfile in profile.go (Task 2).
 type Config struct {
