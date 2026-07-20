@@ -40,11 +40,22 @@ supervisord -c /etc/supervisor/supervisord.conf >&2 &
 #
 # Bounded, and deliberately not fatal: if the daemon never arrives, fall through
 # and let the server's gate report the failure in its own terms.
-driver_sock=/home/cua/.cache/cua-driver/cua-driver.sock
+# Derived from HOME rather than hardcoded: the daemon builds this path as
+# $HOME/.cache/cua-driver/, so deriving it keeps the two in step. HOME is
+# /home/cua for root in this image, which is why the literal path worked -- but
+# if a future base image changes it, a hardcoded path would not fail, it would
+# just wait the full 120s and then fall through, which reads as a slow start
+# rather than a broken one.
+driver_sock="${HOME:-/home/cua}/.cache/cua-driver/cua-driver.sock"
 for _ in $(seq 120); do
   [ -S "$driver_sock" ] && break
   sleep 1
 done
+
+# Say so if it never arrived. Without this the loop is silent and the first
+# symptom is a generic `initialize: EOF` from the server, which points nowhere
+# near the real cause. stderr, never stdout -- stdout is the MCP stdio channel.
+[ -S "$driver_sock" ] || echo "warning: cua-driver socket ${driver_sock} not present after 120s" >&2
 
 # exec so the MCP server owns stdin/stdout and receives signals directly.
 exec /usr/local/bin/cua "$@"

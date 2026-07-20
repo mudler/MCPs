@@ -49,10 +49,23 @@ RUN apt-get update \
 # --no-sandbox, so the wrapper takes over both paths nib's discoverChrome
 # probes. /usr/bin/google-chrome arrives from the deb as an update-alternatives
 # symlink; pointing it at the wrapper instead is deliberate.
+#
+# google-chrome-stable is covered too. nib does not probe that name, so nothing
+# depends on it today -- but it is the name the deb advertises and the one a
+# human or a future caller reaches for, and leaving it pointed at the unwrapped
+# binary means that caller gets no --no-sandbox and an opaque launch failure.
 COPY cua/chromium-wrapper.sh /usr/local/lib/chromium-wrapper.sh
 RUN chmod +x /usr/local/lib/chromium-wrapper.sh \
     && ln -sf /usr/local/lib/chromium-wrapper.sh /usr/bin/google-chrome \
-    && ln -sf /usr/local/lib/chromium-wrapper.sh /usr/bin/chromium
+    && ln -sf /usr/local/lib/chromium-wrapper.sh /usr/bin/chromium \
+    && ln -sf /usr/local/lib/chromium-wrapper.sh /usr/bin/google-chrome-stable
+
+# The apt repo above is unpinned, so record what this build actually shipped;
+# otherwise "which Chrome was in that image" stops being answerable. Running it
+# through the wrapper symlink doubles as a build-time check that the wrapper
+# really does launch Chrome.
+RUN google-chrome-stable --version > /etc/cua-chrome-version \
+    && cat /etc/cua-chrome-version
 
 # cua-driver supplies the AT-SPI element tree and input injection. The
 # `-binary` release asset unpacks a bare `cua-driver` executable.
@@ -76,12 +89,31 @@ RUN install -d -o cua -g cua /home/cua/.cua-driver \
         > /home/cua/.cua-driver/config.json \
     && chown cua:cua /home/cua/.cua-driver/config.json
 
-# Replaces the base image's xstartup.sh to also start the cua-driver daemon
-# inside the desktop session. See the script for why it has to live there.
-COPY cua/xstartup.sh /usr/local/bin/xstartup.sh
+# The cua-driver daemon has to start inside the desktop session -- see
+# cua-driver-supervise.sh for why -- which means hooking the base image's
+# xstartup.sh.
+#
+# This *injects* a line rather than shipping our own copy of that file. A
+# verbatim copy would silently win over any future change trycua makes to their
+# xstartup (a new program, different bus handling, a different XFCE
+# invocation): no build error, no runtime error, just a desktop quietly drifted
+# from what the base image expects. Injection inverts that failure mode. The
+# base's xstartup ends with a bare `wait`, and if a future base image no longer
+# does, the grep fails and takes the build down with a message -- loudly, at
+# build time, instead of silently at runtime. This matters more than usual
+# because the FROM above is unpinned `:latest`.
+COPY cua/cua-driver-supervise.sh /usr/local/bin/cua-driver-supervise
+RUN chmod +x /usr/local/bin/cua-driver-supervise \
+    && { grep -qx 'wait' /usr/local/bin/xstartup.sh \
+        || { echo "ERROR: /usr/local/bin/xstartup.sh has no bare 'wait' line to anchor to." >&2; \
+             echo "The base image's xstartup.sh has changed shape; re-check the injection below." >&2; \
+             exit 1; }; } \
+    && sed -i 's|^wait$|cua-driver-supervise \&\nwait|' /usr/local/bin/xstartup.sh \
+    && grep -qx 'cua-driver-supervise &' /usr/local/bin/xstartup.sh
+
 COPY --from=builder /out/cua /usr/local/bin/cua
 COPY cua/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/xstartup.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV DISPLAY=:1
 
