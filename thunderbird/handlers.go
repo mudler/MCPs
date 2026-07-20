@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -119,6 +120,79 @@ func ListFolders(_ context.Context, _ *mcp.CallToolRequest, in ListFoldersInput)
 		}
 	}
 	return nil, out, nil
+}
+
+func requireRemote(ref MessageRef) error {
+	if app.folderIsLocal(ref.FolderURI) {
+		return fmt.Errorf("folder %q is a local (POP/Local Folders) account and is read-only", ref.FolderURI)
+	}
+	return nil
+}
+
+func SetFlags(_ context.Context, _ *mcp.CallToolRequest, in SetFlagsInput) (*mcp.CallToolResult, SetFlagsOutput, error) {
+	ref, err := ParseMessageRef(in.MessageRef)
+	if err != nil {
+		return nil, SetFlagsOutput{}, err
+	}
+	if err := requireRemote(ref); err != nil {
+		return nil, SetFlagsOutput{}, err
+	}
+	var add, remove []imap.Flag
+	if in.Read != nil {
+		if *in.Read {
+			add = append(add, imap.FlagSeen)
+		} else {
+			remove = append(remove, imap.FlagSeen)
+		}
+	}
+	if in.Flagged != nil {
+		if *in.Flagged {
+			add = append(add, imap.FlagFlagged)
+		} else {
+			remove = append(remove, imap.FlagFlagged)
+		}
+	}
+	for _, t := range in.AddTags {
+		add = append(add, imap.Flag(t))
+	}
+	for _, t := range in.RemoveTags {
+		remove = append(remove, imap.Flag(t))
+	}
+	if err := app.IMAP.SetFlags(ref, add, remove); err != nil {
+		return nil, SetFlagsOutput{}, err
+	}
+	return nil, SetFlagsOutput{Success: true}, nil
+}
+
+func MoveMessage(_ context.Context, _ *mcp.CallToolRequest, in MoveMessageInput) (*mcp.CallToolResult, MoveMessageOutput, error) {
+	ref, err := ParseMessageRef(in.MessageRef)
+	if err != nil {
+		return nil, MoveMessageOutput{}, err
+	}
+	if err := requireRemote(ref); err != nil {
+		return nil, MoveMessageOutput{}, err
+	}
+	if in.Destination == "" {
+		return nil, MoveMessageOutput{}, fmt.Errorf("destination is required")
+	}
+	if err := app.IMAP.Move(ref, in.Destination); err != nil {
+		return nil, MoveMessageOutput{}, err
+	}
+	return nil, MoveMessageOutput{Success: true}, nil
+}
+
+func DeleteMessage(_ context.Context, _ *mcp.CallToolRequest, in DeleteMessageInput) (*mcp.CallToolResult, DeleteMessageOutput, error) {
+	ref, err := ParseMessageRef(in.MessageRef)
+	if err != nil {
+		return nil, DeleteMessageOutput{}, err
+	}
+	if err := requireRemote(ref); err != nil {
+		return nil, DeleteMessageOutput{}, err
+	}
+	if err := app.IMAP.Delete(ref, in.Permanent); err != nil {
+		return nil, DeleteMessageOutput{}, err
+	}
+	return nil, DeleteMessageOutput{Success: true}, nil
 }
 
 func listLocalFolders(a *Account) []FolderInfo {

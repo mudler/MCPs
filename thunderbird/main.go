@@ -22,6 +22,9 @@ func allTools() []toolDef {
 		{&mcp.Tool{Name: "search_messages", Description: "Search mail via Thunderbird's index. Filter by query text, from, to, subject, folder URI, and date range. Returns message references."}, SearchMessages, "read"},
 		{&mcp.Tool{Name: "get_message", Description: "Fetch a full message (headers, body, attachment list) by the message_ref from search_messages or list_recent."}, GetMessage, "read"},
 		{&mcp.Tool{Name: "list_recent", Description: "List the most recent messages, optionally within a folder URI."}, ListRecent, "read"},
+		{&mcp.Tool{Name: "set_flags", Description: "Mark a message read/unread, set or clear its flag/star, and add or remove tags. IMAP accounts only."}, SetFlags, "mutate"},
+		{&mcp.Tool{Name: "move_message", Description: "Move a message to another folder in the same IMAP account."}, MoveMessage, "mutate"},
+		{&mcp.Tool{Name: "delete_message", Description: "Delete a message: moves to Trash by default, or expunges permanently when permanent=true. IMAP accounts only."}, DeleteMessage, "mutate"},
 	}
 }
 
@@ -50,6 +53,12 @@ func registerTool(server *mcp.Server, td toolDef) {
 	case func(context.Context, *mcp.CallToolRequest, GetMessageInput) (*mcp.CallToolResult, GetMessageOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	case func(context.Context, *mcp.CallToolRequest, ListRecentInput) (*mcp.CallToolResult, ListRecentOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, SetFlagsInput) (*mcp.CallToolResult, SetFlagsOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, MoveMessageInput) (*mcp.CallToolResult, MoveMessageOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, DeleteMessageInput) (*mcp.CallToolResult, DeleteMessageOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	default:
 		log.Fatalf("no registration case for tool %s", td.tool.Name)

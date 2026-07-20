@@ -179,6 +179,35 @@ type ListRecentOutput struct {
 	Count    int              `json:"count"`
 }
 
+// --- Tool I/O types (Task 11: mutate tools) ---
+
+type SetFlagsInput struct {
+	MessageRef string   `json:"message_ref"`
+	Read       *bool    `json:"read,omitempty" jsonschema:"set read (true) or unread (false)"`
+	Flagged    *bool    `json:"flagged,omitempty" jsonschema:"set or clear the star/flag"`
+	AddTags    []string `json:"add_tags,omitempty"`
+	RemoveTags []string `json:"remove_tags,omitempty"`
+}
+type SetFlagsOutput struct {
+	Success bool `json:"success"`
+}
+
+type MoveMessageInput struct {
+	MessageRef  string `json:"message_ref"`
+	Destination string `json:"destination" jsonschema:"destination folder name within the same account (e.g. Archive)"`
+}
+type MoveMessageOutput struct {
+	Success bool `json:"success"`
+}
+
+type DeleteMessageInput struct {
+	MessageRef string `json:"message_ref"`
+	Permanent  bool   `json:"permanent,omitempty" jsonschema:"if true, expunge permanently; default moves to Trash"`
+}
+type DeleteMessageOutput struct {
+	Success bool `json:"success"`
+}
+
 // Contact is an address-book entry from abook.sqlite.
 type Contact struct {
 	Name     string `json:"name"`

@@ -37,3 +37,19 @@ var _ = Describe("Read handlers", func() {
 		Expect(out.Messages[0].Subject).To(Equal("Quarterly report"))
 	})
 })
+
+var _ = Describe("Mutate handlers reject local folders", func() {
+	BeforeEach(func() {
+		app = &App{Config: &Config{Accounts: []Account{{Type: "none", Hostname: "Local Folders"}}}}
+		app.IMAP = NewIMAP(app.Config, &Credentials{})
+	})
+	It("set_flags on a mailbox:// ref errors", func() {
+		_, _, err := SetFlags(context.Background(), nil, SetFlagsInput{
+			MessageRef: "mailbox://nobody@Local%20Folders/INBOX#42", Read: ptr(true),
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("read-only"))
+	})
+})
+
+func ptr[T any](v T) *T { return &v }
