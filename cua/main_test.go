@@ -37,10 +37,10 @@ var _ = Describe("startUpstreams", func() {
 	// display and no cua-driver. That makes it a real check that the nib
 	// entrypoint is wired to a working session and exports the tools we expect.
 	It("starts the browser upstream and exposes its tools", func() {
-		// ReadyTimeout bounds the connect handshake in startUpstream; LoadConfig
-		// always supplies a non-zero value, so a test constructing a Config by
-		// hand has to as well.
-		cfg := Config{ReadyTimeout: 30 * time.Second}
+		// A zero-value Config is deliberate: startUpstream substitutes the
+		// default budget for a non-positive one, so this passing is evidence
+		// that a zero ReadyTimeout no longer breaks startup.
+		cfg := Config{}
 		cfg.NibConfig.Browser.Enabled = true
 
 		ups, err := startUpstreams(ctx, cfg)
@@ -82,7 +82,7 @@ var _ = Describe("startUpstream", func() {
 		// finite, so a regression fails the spec rather than wedging the suite.
 		done := make(chan error, 1)
 		go func() {
-			_, err := startUpstream(context.Background(), "computer", time.Minute, func(mcp.Transport) error {
+			_, err := startUpstream(context.Background(), "computer", time.Minute, func(context.Context, mcp.Transport) error {
 				return boom
 			})
 			done <- err
@@ -100,7 +100,7 @@ var _ = Describe("startUpstream", func() {
 
 		done := make(chan error, 1)
 		go func() {
-			_, err := startUpstream(context.Background(), "browser", time.Minute, func(mcp.Transport) error {
+			_, err := startUpstream(context.Background(), "browser", time.Minute, func(context.Context, mcp.Transport) error {
 				return nil
 			})
 			done <- err
@@ -109,5 +109,53 @@ var _ = Describe("startUpstream", func() {
 		var err error
 		Eventually(done, 10*time.Second).Should(Receive(&err))
 		Expect(err.Error()).To(ContainSubstring("browser server: returned before serving"))
+	})
+
+	// CUA_READY_TIMEOUT=0 parses cleanly, so a zero budget can reach here and
+	// would otherwise build an already-expired handshake deadline, failing
+	// every upstream with "context deadline exceeded".
+	It("substitutes the default budget for a zero timeout", func() {
+		log.SetOutput(io.Discard)
+		DeferCleanup(func() { log.SetOutput(GinkgoWriter) })
+
+		type result struct {
+			u   *upstream
+			err error
+		}
+		done := make(chan result, 1)
+		go func() {
+			u, err := startUpstream(context.Background(), "stub", 0, func(sctx context.Context, t mcp.Transport) error {
+				return mcp.NewServer(&mcp.Implementation{Name: "stub", Version: "test"}, nil).Run(sctx, t)
+			})
+			done <- result{u, err}
+		}()
+
+		var r result
+		Eventually(done, 10*time.Second).Should(Receive(&r))
+		Expect(r.err).NotTo(HaveOccurred())
+		Expect(r.u).NotTo(BeNil())
+		DeferCleanup(r.u.session.Close)
+	})
+
+	// The other specs all resolve through the serveErr branch. This one leaves
+	// the server end unattached, so only connCtx's deadline can unblock Connect.
+	It("gives up when the server never attaches, bounded by the timeout", func() {
+		log.SetOutput(io.Discard)
+		DeferCleanup(func() { log.SetOutput(GinkgoWriter) })
+
+		done := make(chan error, 1)
+		go func() {
+			_, err := startUpstream(context.Background(), "parked", 200*time.Millisecond, func(sctx context.Context, _ mcp.Transport) error {
+				<-sctx.Done()
+				return sctx.Err()
+			})
+			done <- err
+		}()
+
+		// Generous relative to the 200ms budget but finite, so a regression
+		// fails the spec rather than wedging the suite.
+		var err error
+		Eventually(done, 10*time.Second).Should(Receive(&err))
+		Expect(err).To(MatchError(context.DeadlineExceeded))
 	})
 })

@@ -83,4 +83,17 @@ var _ = Describe("LoadConfig", func() {
 		os.Setenv("CUA_READY_TIMEOUT", "not-a-duration")
 		Expect(LoadConfig().ReadyTimeout).To(Equal(60 * time.Second))
 	})
+
+	// "0 means unlimited" is a common operator convention, but time.ParseDuration
+	// accepts these happily and a zero budget makes every readiness deadline
+	// already-expired. Treat non-positive as "unset" rather than "no time".
+	DescribeTable("falls back to the default ready timeout when non-positive",
+		func(raw string) {
+			os.Setenv("CUA_READY_TIMEOUT", raw)
+			Expect(LoadConfig().ReadyTimeout).To(Equal(60 * time.Second))
+		},
+		Entry("bare zero", "0"),
+		Entry("zero seconds", "0s"),
+		Entry("negative", "-5s"),
+	)
 })

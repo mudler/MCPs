@@ -86,12 +86,27 @@ func redirectNibLogsToStderr() {
 // is never connected and never closed, so a bare connectUpstream would block on
 // the initialize round-trip forever. Racing the serve error against the connect,
 // under a timeout, turns that hang into a reported failure.
-func startUpstream(ctx context.Context, name string, timeout time.Duration, serve func(mcp.Transport) error) (*upstream, error) {
+func startUpstream(ctx context.Context, name string, timeout time.Duration, serve func(context.Context, mcp.Transport) error) (*upstream, error) {
+	// A non-positive budget would make the handshake deadline already-expired,
+	// failing every upstream. Callers can reach here with one (CUA_READY_TIMEOUT
+	// aside, the signature invites a bare duration), so defend the callee.
+	if timeout <= 0 {
+		timeout = defaultReadyTimeout
+	}
 	serverT, clientT := mcp.NewInMemoryTransports()
 
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- serve(serverT) }()
+	// serveCtx lets us stop a server whose client never attached; otherwise a
+	// failed connect would leave it running — and for the computer upstream,
+	// leave a cua-driver subprocess alive — until the parent ctx ends.
+	serveCtx, cancelServe := context.WithCancel(ctx)
 
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- serve(serveCtx, serverT) }()
+
+	// connCtx bounds the handshake only. The established session does NOT
+	// inherit its cancellation: go-sdk's jsonrpc2 wraps the connection ctx in
+	// notDone, stripping Done/Err. If a future SDK stops doing that, every
+	// upstream would die the moment this function returns.
 	connCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -112,13 +127,39 @@ func startUpstream(ctx context.Context, name string, timeout time.Duration, serv
 		if err == nil {
 			err = fmt.Errorf("returned before serving")
 		}
+		cancelServe()
+		// The connect may have succeeded in the same instant; do not strand it.
+		go func() {
+			if r := <-done; r.err == nil && r.u.session != nil {
+				r.u.session.Close()
+			}
+		}()
 		return nil, fmt.Errorf("%s server: %w", name, err)
+	case <-connCtx.Done():
+		// Cancelling connCtx is not enough to unblock Connect: the in-memory
+		// pair is a net.Pipe, and jsonrpc2's writer polls ctx once and then
+		// writes without a deadline. A server that starts but never attaches
+		// its end therefore parks the handshake for good, so enforce the budget
+		// here rather than waiting on a connect that cannot return.
+		cancelServe()
+		go func() {
+			if r := <-done; r.err == nil && r.u.session != nil {
+				r.u.session.Close()
+			}
+		}()
+		return nil, fmt.Errorf("connect to %s server: %w", name, connCtx.Err())
 	case r := <-done:
 		if r.err != nil {
+			cancelServe()
 			return nil, r.err
 		}
 		go func() {
-			if err := <-serveErr; err != nil && !errors.Is(err, context.Canceled) {
+			// Blocks for the server's whole life, so serveCtx is only released
+			// once serving has already stopped — never cancelled out from under
+			// a healthy upstream.
+			err := <-serveErr
+			cancelServe()
+			if err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("%s server error: %v", name, err)
 			}
 		}()
@@ -166,8 +207,8 @@ func startUpstreams(ctx context.Context, cfg Config) ([]*upstream, error) {
 				"Check that at-spi2-core is installed and a session D-Bus is running.")
 		}
 
-		u, err := startUpstream(ctx, "computer", cfg.ReadyTimeout, func(t mcp.Transport) error {
-			return nibmcp.StartComputerMCPServer(ctx, t, cfg.NibConfig)
+		u, err := startUpstream(ctx, "computer", cfg.ReadyTimeout, func(sctx context.Context, t mcp.Transport) error {
+			return nibmcp.StartComputerMCPServer(sctx, t, cfg.NibConfig)
 		})
 		if err != nil {
 			return nil, err
@@ -176,8 +217,8 @@ func startUpstreams(ctx context.Context, cfg Config) ([]*upstream, error) {
 	}
 
 	if cfg.NibConfig.Browser.Enabled {
-		u, err := startUpstream(ctx, "browser", cfg.ReadyTimeout, func(t mcp.Transport) error {
-			return nibmcp.StartBrowserMCPServer(ctx, t, cfg.NibConfig)
+		u, err := startUpstream(ctx, "browser", cfg.ReadyTimeout, func(sctx context.Context, t mcp.Transport) error {
+			return nibmcp.StartBrowserMCPServer(sctx, t, cfg.NibConfig)
 		})
 		if err != nil {
 			closeUpstreams(ups)

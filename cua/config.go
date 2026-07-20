@@ -64,7 +64,9 @@ func LoadConfig() Config {
 
 	readyTimeout := defaultReadyTimeout
 	if raw := os.Getenv("CUA_READY_TIMEOUT"); raw != "" {
-		if d, err := time.ParseDuration(raw); err == nil {
+		// A zero or negative budget would make every readiness deadline
+		// already-expired, so treat it as "unset" rather than "no time".
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
 			readyTimeout = d
 		}
 	}
