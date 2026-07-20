@@ -22,6 +22,24 @@ var _ = Describe("localMboxPath", func() {
 		Expect(localMboxPath(a, "mailbox://nobody@Local%20Folders/Archive/2023")).
 			To(Equal(filepath.FromSlash("/base/Archive.sbd/2023")))
 	})
+
+	// Security: percent-encoded traversal must not escape a.Directory. Against
+	// the pre-fix code these URIs resolved to a traversing path (e.g. /etc/passwd);
+	// they must now resolve to "".
+	It("rejects an encoded ../../etc/passwd traversal", func() {
+		Expect(localMboxPath(a, "mailbox://nobody@Local%20Folders/%2e%2e%2f%2e%2e%2fetc%2fpasswd")).
+			To(Equal(""))
+	})
+
+	It("rejects a trailing .. segment", func() {
+		Expect(localMboxPath(a, "mailbox://nobody@Local%20Folders/..")).
+			To(Equal(""))
+	})
+
+	It("rejects an encoded slash inside a single segment", func() {
+		Expect(localMboxPath(a, "mailbox://nobody@Local%20Folders/foo%2fbar")).
+			To(Equal(""))
+	})
 })
 
 var _ = Describe("listLocalFolders round-trip", func() {

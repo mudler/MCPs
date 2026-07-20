@@ -92,8 +92,24 @@ func readMboxAt(mboxPath string, offset uint32) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// unsafeFolderSegment reports whether a decoded folder segment is unsafe to use
+// as a single path component. Rejecting these closes a path-traversal hole where
+// a percent-encoded slash or "..", surviving inside a segment after decoding,
+// would otherwise let filepath.Join escape a.Directory.
+func unsafeFolderSegment(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return true
+	}
+	if strings.ContainsRune(s, '\x00') {
+		return true
+	}
+	return strings.ContainsRune(s, '/') || strings.ContainsRune(s, os.PathSeparator)
+}
+
 // localMboxPath maps a mailbox:// folder URI to its on-disk mbox file.
 // mailbox://nobody@Local%20Folders/Sub/Leaf -> <dir>/Sub.sbd/Leaf
+// It returns "" when the URI cannot be resolved to a path that is provably
+// inside a.Directory (defense in depth against path traversal).
 func localMboxPath(a *Account, folderURI string) string {
 	parts := mailboxFolderPath(folderURI)
 	if len(parts) == 0 {
@@ -101,11 +117,20 @@ func localMboxPath(a *Account, folderURI string) string {
 	}
 	segs := make([]string, 0, len(parts))
 	for i, p := range parts {
+		if unsafeFolderSegment(p) {
+			return ""
+		}
 		if i < len(parts)-1 {
 			segs = append(segs, p+".sbd")
 		} else {
 			segs = append(segs, p)
 		}
 	}
-	return filepath.Join(append([]string{a.Directory}, segs...)...)
+	joined := filepath.Join(append([]string{a.Directory}, segs...)...)
+	// Backstop: confirm the joined path stays within a.Directory.
+	rel, err := filepath.Rel(a.Directory, joined)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return ""
+	}
+	return joined
 }

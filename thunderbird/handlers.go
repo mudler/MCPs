@@ -70,7 +70,11 @@ func GetMessage(_ context.Context, _ *mcp.CallToolRequest, in GetMessageInput) (
 		if err != nil {
 			return nil, GetMessageOutput{}, err
 		}
-		raw, err = readMboxAt(localMboxPath(a, ref.FolderURI), ref.MessageKey)
+		mboxPath := localMboxPath(a, ref.FolderURI)
+		if mboxPath == "" {
+			return nil, GetMessageOutput{}, fmt.Errorf("cannot resolve a safe local folder path for %q", ref.FolderURI)
+		}
+		raw, err = readMboxAt(mboxPath, ref.MessageKey)
 		if err != nil {
 			return nil, GetMessageOutput{}, fmt.Errorf("reading local message: %w", err)
 		}
@@ -225,7 +229,11 @@ func loadDetail(messageRef string) (MessageDetail, error) {
 		if err != nil {
 			return MessageDetail{}, err
 		}
-		raw, err = readMboxAt(localMboxPath(a, ref.FolderURI), ref.MessageKey)
+		mboxPath := localMboxPath(a, ref.FolderURI)
+		if mboxPath == "" {
+			return MessageDetail{}, fmt.Errorf("cannot resolve a safe local folder path for %q", ref.FolderURI)
+		}
+		raw, err = readMboxAt(mboxPath, ref.MessageKey)
 		if err != nil {
 			return MessageDetail{}, err
 		}
