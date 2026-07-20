@@ -1,5 +1,45 @@
 package main
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// MessageRef identifies a message by its folder URI and messageKey.
+type MessageRef struct {
+	FolderURI  string
+	MessageKey uint32
+}
+
+// String renders the ref as "<folderURI>#<messageKey>".
+func (r MessageRef) String() string {
+	return fmt.Sprintf("%s#%d", r.FolderURI, r.MessageKey)
+}
+
+// ParseMessageRef parses a "<folderURI>#<messageKey>" string.
+func ParseMessageRef(s string) (MessageRef, error) {
+	i := strings.LastIndex(s, "#")
+	if i < 0 {
+		return MessageRef{}, fmt.Errorf("invalid message_ref %q", s)
+	}
+	key, err := strconv.ParseUint(s[i+1:], 10, 32)
+	if err != nil {
+		return MessageRef{}, fmt.Errorf("invalid message_ref key in %q: %w", s, err)
+	}
+	return MessageRef{FolderURI: s[:i], MessageKey: uint32(key)}, nil
+}
+
+// MessageSummary is a search-index result row.
+type MessageSummary struct {
+	Ref     string    `json:"message_ref" jsonschema:"opaque reference: pass to get_message and mutation tools"`
+	Subject string    `json:"subject"`
+	Author  string    `json:"author"`
+	Snippet string    `json:"snippet" jsonschema:"short body excerpt from the search index (may be truncated)"`
+	Date    time.Time `json:"date"`
+}
+
 // Config is the parsed Thunderbird profile configuration.
 // Populated by loadProfile in profile.go (Task 2).
 type Config struct {
