@@ -36,13 +36,17 @@ func registerTool(server *mcp.Server, td toolDef) {
 }
 
 func main() {
-	a := &App{
-		ReadOnly:  os.Getenv("THUNDERBIRD_READ_ONLY") == "true",
-		AllowSend: os.Getenv("THUNDERBIRD_ALLOW_SEND") == "true",
+	profileDir, err := discoverProfile()
+	if err != nil {
+		log.Fatalf("thunderbird: %v", err)
 	}
-	app = a
+	loaded, err := LoadApp(profileDir, os.Getenv("THUNDERBIRD_READ_ONLY") == "true", os.Getenv("THUNDERBIRD_ALLOW_SEND") == "true")
+	if err != nil {
+		log.Fatalf("thunderbird: %v", err)
+	}
+	app = loaded
+	log.Printf("thunderbird: loaded profile %s (%d accounts)", profileDir, len(app.Config.Accounts))
 
-	// Profile loading wired in Task 2+.
 	filter := parseToolFilter(os.Getenv("THUNDERBIRD_TOOLS"))
 	server := mcp.NewServer(&mcp.Implementation{Name: "thunderbird", Version: "v1.0.0"}, nil)
 
