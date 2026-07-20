@@ -195,6 +195,147 @@ func DeleteMessage(_ context.Context, _ *mcp.CallToolRequest, in DeleteMessageIn
 	return nil, DeleteMessageOutput{Success: true}, nil
 }
 
+// --- Compose tools (Task 12) ---
+
+func SendMail(_ context.Context, _ *mcp.CallToolRequest, in SendMailInput) (*mcp.CallToolResult, SendMailOutput, error) {
+	if in.From == "" || len(in.To) == 0 {
+		return nil, SendMailOutput{}, fmt.Errorf("from and to are required")
+	}
+	err := app.Sender.Send(OutgoingMessage{
+		From: []string{in.From}, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
+		Subject: in.Subject, BodyText: in.Body,
+	})
+	if err != nil {
+		return nil, SendMailOutput{}, err
+	}
+	return nil, SendMailOutput{Success: true}, nil
+}
+
+// loadDetail fetches and parses a message's full body, reusing get_message's
+// local-vs-IMAP path resolution.
+func loadDetail(messageRef string) (MessageDetail, error) {
+	ref, err := ParseMessageRef(messageRef)
+	if err != nil {
+		return MessageDetail{}, err
+	}
+	var raw []byte
+	if app.folderIsLocal(ref.FolderURI) {
+		a, err := app.localAccountFor(ref.FolderURI)
+		if err != nil {
+			return MessageDetail{}, err
+		}
+		raw, err = readMboxAt(localMboxPath(a, ref.FolderURI), ref.MessageKey)
+		if err != nil {
+			return MessageDetail{}, err
+		}
+	} else {
+		raw, err = app.IMAP.FetchBody(ref)
+		if err != nil {
+			return MessageDetail{}, err
+		}
+	}
+	return ParseMessage(messageRef, raw)
+}
+
+func defaultFrom(_ MessageDetail, given string) string {
+	if given != "" {
+		return given
+	}
+	// Fall back to the first identity of the first account.
+	for _, a := range app.Config.Accounts {
+		if len(a.Identities) > 0 {
+			return a.Identities[0].Email
+		}
+	}
+	return ""
+}
+
+func ReplyMessage(_ context.Context, _ *mcp.CallToolRequest, in ReplyMessageInput) (*mcp.CallToolResult, ReplyMessageOutput, error) {
+	orig, err := loadDetail(in.MessageRef)
+	if err != nil {
+		return nil, ReplyMessageOutput{}, err
+	}
+	inReplyTo, references := replyHeaders(orig)
+	to := []string{firstAddress(orig.Author)}
+	var cc []string
+	if in.ReplyAll {
+		cc = append(cc, orig.To...)
+		cc = append(cc, orig.Cc...)
+	}
+	body := in.Body + "\n\n" + quoteForReply(orig)
+	err = app.Sender.Send(OutgoingMessage{
+		From: []string{defaultFrom(orig, in.From)}, To: to, Cc: cc,
+		Subject: ensurePrefix(orig.Subject, "Re: "), BodyText: body,
+		InReplyTo: inReplyTo, References: references,
+	})
+	if err != nil {
+		return nil, ReplyMessageOutput{}, err
+	}
+	return nil, ReplyMessageOutput{Success: true}, nil
+}
+
+func ForwardMessage(_ context.Context, _ *mcp.CallToolRequest, in ForwardMessageInput) (*mcp.CallToolResult, ForwardMessageOutput, error) {
+	if len(in.To) == 0 {
+		return nil, ForwardMessageOutput{}, fmt.Errorf("to is required")
+	}
+	orig, err := loadDetail(in.MessageRef)
+	if err != nil {
+		return nil, ForwardMessageOutput{}, err
+	}
+	body := in.Body + "\n\n---------- Forwarded message ----------\n" +
+		"From: " + orig.Author + "\nSubject: " + orig.Subject + "\n\n" + orig.BodyText
+	err = app.Sender.Send(OutgoingMessage{
+		From: []string{defaultFrom(orig, in.From)}, To: in.To,
+		Subject: ensurePrefix(orig.Subject, "Fwd: "), BodyText: body,
+	})
+	if err != nil {
+		return nil, ForwardMessageOutput{}, err
+	}
+	return nil, ForwardMessageOutput{Success: true}, nil
+}
+
+func SaveDraft(_ context.Context, _ *mcp.CallToolRequest, in SaveDraftInput) (*mcp.CallToolResult, SaveDraftOutput, error) {
+	raw, err := BuildRFC822(OutgoingMessage{
+		From: []string{in.From}, To: in.To, Subject: in.Subject, BodyText: in.Body,
+	})
+	if err != nil {
+		return nil, SaveDraftOutput{}, err
+	}
+	folder := draftFolderFor(in.From)
+	if err := app.IMAP.Append(folder, raw, []imap.Flag{imap.FlagDraft}); err != nil {
+		return nil, SaveDraftOutput{}, err
+	}
+	return nil, SaveDraftOutput{Success: true}, nil
+}
+
+func firstAddress(s string) string {
+	if i := strings.LastIndex(s, "<"); i >= 0 {
+		if j := strings.Index(s[i:], ">"); j >= 0 {
+			return s[i+1 : i+j]
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+func ensurePrefix(subject, prefix string) string {
+	if strings.HasPrefix(strings.ToLower(subject), strings.ToLower(prefix)) {
+		return subject
+	}
+	return prefix + subject
+}
+
+// draftFolderFor returns the identity's draft folder URI, or a bare "Drafts".
+func draftFolderFor(fromEmail string) string {
+	for _, a := range app.Config.Accounts {
+		for _, id := range a.Identities {
+			if strings.EqualFold(id.Email, fromEmail) && id.DraftFolder != "" {
+				return id.DraftFolder
+			}
+		}
+	}
+	return "Drafts"
+}
+
 func listLocalFolders(a *Account) []FolderInfo {
 	var out []FolderInfo
 	_ = filepath.Walk(a.Directory, func(path string, info os.FileInfo, err error) error {

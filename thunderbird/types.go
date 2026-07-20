@@ -208,6 +208,50 @@ type DeleteMessageOutput struct {
 	Success bool `json:"success"`
 }
 
+// --- Tool I/O types (Task 12: compose tools) ---
+
+type SendMailInput struct {
+	From    string   `json:"from" jsonschema:"identity email to send as (see list_accounts)"`
+	To      []string `json:"to"`
+	Cc      []string `json:"cc,omitempty"`
+	Bcc     []string `json:"bcc,omitempty"`
+	Subject string   `json:"subject"`
+	Body    string   `json:"body"`
+}
+type SendMailOutput struct {
+	Success bool `json:"success"`
+}
+
+type ReplyMessageInput struct {
+	MessageRef string `json:"message_ref" jsonschema:"message being replied to"`
+	From       string `json:"from,omitempty" jsonschema:"identity to send as; defaults to the account's identity"`
+	Body       string `json:"body"`
+	ReplyAll   bool   `json:"reply_all,omitempty"`
+}
+type ReplyMessageOutput struct {
+	Success bool `json:"success"`
+}
+
+type ForwardMessageInput struct {
+	MessageRef string   `json:"message_ref"`
+	From       string   `json:"from,omitempty"`
+	To         []string `json:"to"`
+	Body       string   `json:"body,omitempty"`
+}
+type ForwardMessageOutput struct {
+	Success bool `json:"success"`
+}
+
+type SaveDraftInput struct {
+	From    string   `json:"from"`
+	To      []string `json:"to,omitempty"`
+	Subject string   `json:"subject,omitempty"`
+	Body    string   `json:"body,omitempty"`
+}
+type SaveDraftOutput struct {
+	Success bool `json:"success"`
+}
+
 // Contact is an address-book entry from abook.sqlite.
 type Contact struct {
 	Name     string `json:"name"`

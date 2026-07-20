@@ -25,6 +25,10 @@ func allTools() []toolDef {
 		{&mcp.Tool{Name: "set_flags", Description: "Mark a message read/unread, set or clear its flag/star, and add or remove tags. IMAP accounts only."}, SetFlags, "mutate"},
 		{&mcp.Tool{Name: "move_message", Description: "Move a message to another folder in the same IMAP account."}, MoveMessage, "mutate"},
 		{&mcp.Tool{Name: "delete_message", Description: "Delete a message: moves to Trash by default, or expunges permanently when permanent=true. IMAP accounts only."}, DeleteMessage, "mutate"},
+		{&mcp.Tool{Name: "send_mail", Description: "Send a new email as one of your identities. Requires THUNDERBIRD_ALLOW_SEND=true."}, SendMail, "compose"},
+		{&mcp.Tool{Name: "reply_message", Description: "Reply to a message, quoting the original and threading correctly. Requires THUNDERBIRD_ALLOW_SEND=true."}, ReplyMessage, "compose"},
+		{&mcp.Tool{Name: "forward_message", Description: "Forward a message to new recipients. Requires THUNDERBIRD_ALLOW_SEND=true."}, ForwardMessage, "compose"},
+		{&mcp.Tool{Name: "save_draft", Description: "Save a draft to the Drafts folder (visible in Thunderbird). Requires THUNDERBIRD_ALLOW_SEND=true."}, SaveDraft, "compose"},
 	}
 }
 
@@ -59,6 +63,14 @@ func registerTool(server *mcp.Server, td toolDef) {
 	case func(context.Context, *mcp.CallToolRequest, MoveMessageInput) (*mcp.CallToolResult, MoveMessageOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	case func(context.Context, *mcp.CallToolRequest, DeleteMessageInput) (*mcp.CallToolResult, DeleteMessageOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, SendMailInput) (*mcp.CallToolResult, SendMailOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ReplyMessageInput) (*mcp.CallToolResult, ReplyMessageOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, ForwardMessageInput) (*mcp.CallToolResult, ForwardMessageOutput, error):
+		mcp.AddTool(server, td.tool, h)
+	case func(context.Context, *mcp.CallToolRequest, SaveDraftInput) (*mcp.CallToolResult, SaveDraftOutput, error):
 		mcp.AddTool(server, td.tool, h)
 	default:
 		log.Fatalf("no registration case for tool %s", td.tool.Name)

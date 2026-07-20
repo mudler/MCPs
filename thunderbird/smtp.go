@@ -119,6 +119,17 @@ func (s *Sender) Send(msg OutgoingMessage) error {
 	addr := net.JoinHostPort(srv.Hostname, strconv.Itoa(srv.Port))
 	tlsConf := &tls.Config{ServerName: srv.Hostname}
 
+	if srv.SocketType == 0 { // plaintext (loopback test server / plain local relay)
+		c, err := smtp.Dial(addr)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		if err := c.SendMail(msg.From[0], rcpts, bytes.NewReader(raw)); err != nil {
+			return err
+		}
+		return c.Quit()
+	}
 	if srv.SocketType == 3 { // implicit TLS
 		return smtp.SendMailTLS(addr, auth, msg.From[0], rcpts, bytes.NewReader(raw))
 	}
