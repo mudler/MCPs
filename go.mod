@@ -12,6 +12,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/mudler/go-processmanager v0.1.0
 	github.com/mudler/nib v0.4.2-0.20260716225335-65925648b37e
+	github.com/mudler/xlog v0.0.1
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
 	github.com/sashabaranov/go-openai v1.41.2
@@ -45,9 +46,16 @@ require (
 	github.com/blevesearch/zapx/v14 v14.4.2 // indirect
 	github.com/blevesearch/zapx/v15 v15.4.2 // indirect
 	github.com/blevesearch/zapx/v16 v16.2.8 // indirect
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
+	github.com/chromedp/chromedp v0.15.1 // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
@@ -59,6 +67,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
+	github.com/mudler/cogito v0.11.1-0.20260716224639-3c908637a657 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.3 // indirect

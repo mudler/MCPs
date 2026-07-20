@@ -7,9 +7,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// version is overridden at build time with -X main.version=...
-var version = "dev"
-
 // upstream is a connected client session to one of nib's in-process MCP
 // servers, together with a label used in error messages.
 type upstream struct {
