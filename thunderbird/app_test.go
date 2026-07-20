@@ -14,6 +14,19 @@ var _ = Describe("LoadApp (profile only)", func() {
 		Expect(a.Contacts).To(BeNil()) // no abook.sqlite
 		Expect(a.IMAP).NotTo(BeNil())  // always constructed
 	})
+
+	It("degrades to an empty credential store instead of failing when credentials cannot load", func() {
+		// A credential-load failure only disables IMAP/SMTP; the app must still come up
+		// with a working IMAP/Sender that fail cleanly (no stored password) at call time.
+		a, err := loadAppFromConfig(
+			&Config{ProfileDir: "testdata", Accounts: nil, SMTP: map[string]SMTPServer{}},
+			&Credentials{}, false, false,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(a).NotTo(BeNil())
+		Expect(a.IMAP).NotTo(BeNil())
+		Expect(a.Sender).NotTo(BeNil())
+	})
 })
 
 var _ = Describe("folderIsLocal", func() {

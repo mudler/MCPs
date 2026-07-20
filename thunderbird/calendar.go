@@ -27,7 +27,7 @@ func OpenCalendar(profileDir string, cals []CalendarRef) (*Calendar, error) {
 }
 
 func openCalendarAt(path string, names map[string]string) (*Calendar, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
 	if err != nil {
 		return nil, err
 	}

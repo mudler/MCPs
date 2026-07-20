@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -338,6 +339,8 @@ func draftFolderFor(fromEmail string) string {
 
 func listLocalFolders(a *Account) []FolderInfo {
 	var out []FolderInfo
+	escUser := url.PathEscape(a.Username)
+	escHost := url.PathEscape(a.Hostname)
 	_ = filepath.Walk(a.Directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -346,9 +349,24 @@ func listLocalFolders(a *Account) []FolderInfo {
 		if strings.HasSuffix(name, ".msf") || strings.HasSuffix(name, ".dat") {
 			return nil
 		}
+		// Compute the folder path relative to a.Directory and turn on-disk ".sbd"
+		// intermediate directories back into plain folder segments, so the emitted
+		// URI round-trips through localMboxPath to this exact file.
+		rel, relErr := filepath.Rel(a.Directory, path)
+		if relErr != nil {
+			return nil
+		}
+		rawSegs := strings.Split(filepath.ToSlash(rel), "/")
+		escSegs := make([]string, 0, len(rawSegs))
+		for i, s := range rawSegs {
+			if i < len(rawSegs)-1 {
+				s = strings.TrimSuffix(s, ".sbd")
+			}
+			escSegs = append(escSegs, url.PathEscape(s))
+		}
 		out = append(out, FolderInfo{
 			Name:    name,
-			URI:     "mailbox://" + a.Username + "@" + a.Hostname + "/" + name,
+			URI:     "mailbox://" + escUser + "@" + escHost + "/" + strings.Join(escSegs, "/"),
 			Account: a.Key, Local: true,
 		})
 		return nil

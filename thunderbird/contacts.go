@@ -19,7 +19,7 @@ func OpenContacts(profileDir string) (*Contacts, error) {
 }
 
 func openContactsAt(path string) (*Contacts, error) {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&immutable=1")
 	if err != nil {
 		return nil, err
 	}

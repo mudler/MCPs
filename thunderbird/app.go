@@ -30,7 +30,12 @@ func LoadApp(profileDir string, readOnly, allowSend bool) (*App, error) {
 	}
 	creds, err := LoadCredentials(profileDir)
 	if err != nil {
-		return nil, err // includes ErrMasterPassword — fail hard with a clear message
+		// A credential/decryption failure (including ErrMasterPassword) must not be
+		// fatal: it only disables IMAP/SMTP. The read-only gloda/contacts/calendar/local
+		// tools need no credentials, so continue with an empty credential store — its
+		// Lookup returns ("", false), so IMAP.connect/Sender.Send fail cleanly later.
+		log.Printf("thunderbird: WARNING: could not load credentials (%v); IMAP/SMTP (fetch, mutate, send) disabled — read-only search/contacts/calendar still available", err)
+		creds = &Credentials{}
 	}
 	return loadAppFromConfig(cfg, creds, readOnly, allowSend)
 }
@@ -63,11 +68,22 @@ func (a *App) folderIsLocal(folderURI string) bool {
 }
 
 func (a *App) localAccountFor(folderURI string) (*Account, error) {
+	host := mailboxAuthorityHost(folderURI)
+	var first *Account
 	for i := range a.Config.Accounts {
 		acct := &a.Config.Accounts[i]
-		if acct.IsLocal() {
+		if !acct.IsLocal() {
+			continue
+		}
+		if first == nil {
+			first = acct
+		}
+		if host != "" && acct.Hostname == host {
 			return acct, nil
 		}
+	}
+	if first != nil {
+		return first, nil
 	}
 	return nil, fmt.Errorf("no local account for %q", folderURI)
 }
