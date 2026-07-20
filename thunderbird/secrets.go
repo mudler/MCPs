@@ -42,7 +42,7 @@ func (c *Credentials) Lookup(host, user string) (string, bool) {
 
 type algorithmIdentifier struct {
 	Algorithm  asn1.ObjectIdentifier
-	Parameters asn1.RawValue
+	Parameters asn1.RawValue `asn1:"optional"`
 }
 type encryptedItem struct { // outer: { AlgorithmIdentifier, OCTET STRING }
 	Algo   algorithmIdentifier
@@ -55,8 +55,8 @@ type pbeParam3DES struct { // legacy params: { salt, iterations }
 type pbkdf2Params struct {
 	EntrySalt  []byte
 	Iterations int
-	KeyLength  int
-	Prf        algorithmIdentifier
+	KeyLength  int                 `asn1:"optional"`
+	Prf        algorithmIdentifier `asn1:"optional"`
 }
 type pbes2Params struct {
 	KeyDerivation algorithmIdentifier // PBKDF2 + params

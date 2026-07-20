@@ -82,10 +82,10 @@ type SMTPServer struct {
 
 // CalendarRef is a calendar registered in the profile.
 type CalendarRef struct {
-	UUID string
-	Name string
-	Type string // "storage", "caldav", ...
-	URI  string
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "storage", "caldav", ...
+	URI  string `json:"uri"`
 }
 
 // Account is one Thunderbird mail account.

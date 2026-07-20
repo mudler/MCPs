@@ -1,0 +1,22 @@
+{
+  "nextId": 2,
+  "version": 3,
+  "logins": [
+    {
+      "id": 1,
+      "hostname": "imap://imap.example.com",
+      "httpRealm": null,
+      "formSubmitURL": null,
+      "usernameField": "",
+      "passwordField": "",
+      "encryptedUsername": "MEIEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECKmxtIkC7Dg2BBjQxASsH1kA2KLZzrbe5O74zoBX/tMZV6w=",
+      "encryptedPassword": "MDoEEPgAAAAAAAAAAAAAAAAAAAEwFAYIKoZIhvcNAwcECDsjCs2bMQlABBArSIIpEdGSlV8t+Tfwo1Es",
+      "guid": "{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}",
+      "encType": 1,
+      "timeCreated": 0,
+      "timeLastUsed": 0,
+      "timePasswordChanged": 0,
+      "timesUsed": 0
+    }
+  ]
+}
