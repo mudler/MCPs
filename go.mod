@@ -11,7 +11,7 @@ require (
 	github.com/mkelcik/go-ha-client v1.0.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
 	github.com/mudler/go-processmanager v0.1.0
-	github.com/mudler/nib v0.4.2-0.20260716225335-65925648b37e
+	github.com/mudler/nib v0.4.2-0.20260721073745-44a2c7de8d17
 	github.com/mudler/xlog v0.0.1
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
@@ -67,7 +67,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
-	github.com/mudler/cogito v0.11.1-0.20260716224639-3c908637a657 // indirect
+	github.com/mudler/cogito v0.11.1-0.20260720224530-b618670a2fa0 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.3 // indirect
