@@ -6,7 +6,7 @@ MCP_SERVER ?= duckduckgo
 DOCKER_REGISTRY ?= ghcr.io
 DOCKER_REPOSITORY ?= mudler/mcps
 DOCKER_TAG ?= latest
-GO_VERSION ?= 1.25.1
+GO_VERSION ?= 1.26
 
 # Docker image name
 IMAGE_NAME = $(DOCKER_REGISTRY)/$(DOCKER_REPOSITORY)/$(MCP_SERVER)
@@ -18,6 +18,11 @@ DOCKER_FILE ?= ./Dockerfile
 # Override for opencode (custom Dockerfile)
 ifeq ($(MCP_SERVER),opencode)
 DOCKER_FILE = ./opencode/Dockerfile
+endif
+
+# Override for cua (builds FROM trycua/cua-xfce, not the shared base)
+ifeq ($(MCP_SERVER),cua)
+DOCKER_FILE = ./cua/Dockerfile
 endif
 
 # Default target

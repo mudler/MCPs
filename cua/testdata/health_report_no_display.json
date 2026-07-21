@@ -1,0 +1,35 @@
+{
+  "checks": [
+    { "message": "cua-driver 0.9.1", "name": "binary_version", "status": "pass" },
+    {
+      "data": { "architecture": "x86_64", "os_version": "Ubuntu 22.04.5 LTS" },
+      "message": "Ubuntu 22.04.5 LTS (x86_64)",
+      "name": "platform_supported",
+      "status": "pass"
+    },
+    { "message": "MCP session is active.", "name": "session_active", "status": "pass" },
+    { "message": "not applicable on Linux", "name": "bundle_identity", "status": "skip" },
+    { "message": "not applicable on Linux", "name": "tcc_accessibility", "status": "skip" },
+    { "message": "not applicable on Linux", "name": "tcc_screen_recording", "status": "skip" },
+    {
+      "hint": "Set DISPLAY (X11) — under Wayland, run via XWayland or expose XDG_SESSION_TYPE=x11.",
+      "message": "X11 is not reachable; UI inspection and event injection will fail.",
+      "name": "ax_capability",
+      "status": "fail"
+    },
+    {
+      "message": "X11 is not reachable; screen capture will fail.",
+      "name": "screen_capture_capability",
+      "status": "fail"
+    },
+    {
+      "message": "No WAYLAND_DISPLAY in the environment — not a Wayland session.",
+      "name": "wayland_backend",
+      "status": "skip"
+    }
+  ],
+  "driver_version": "0.9.1",
+  "overall": "degraded",
+  "platform": "linux",
+  "schema_version": "1"
+}
