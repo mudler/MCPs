@@ -1779,6 +1779,89 @@ mcp:
     }
 ```
 
+### 🖥️ CUA Server
+
+A computer-use server that gives a model a real XFCE desktop and a real Chrome browser inside a container, viewable live over noVNC. It implements no tools of its own: it starts the `computer` and `browser` MCP servers from [nib](https://github.com/mudler/nib) on in-memory transports and re-exposes their merged tool list on a single stdio server.
+
+Unlike every other server in this repository, this one is **container-only**. The binary alone is not useful: it needs the XFCE desktop, the session D-Bus, and the `cua-driver serve` daemon that the image starts inside the desktop session.
+
+**Features:**
+- Desktop control addressed by accessibility element index, not just pixel coordinates (AT-SPI via `cua-driver`)
+- Browser control over an accessibility snapshot with `@eN` element refs
+- Chrome runs on the same desktop, so the browser and desktop tools compose
+- Live view of what the model is doing at `http://localhost:6901`
+- Screenshots are returned as image content, so a vision-capable model is required
+
+**Tools:**
+- `computer_use` - Desktop control. Actions: `capture`, `click`, `double_click`, `right_click`, `middle_click`, `drag`, `scroll`, `type`, `key`, `set_value`, `wait`, `list_apps`, `open_app`, `close_app`, `focus_app`. Capture modes: `som` (numbered elements, default), `vision`, `ax`
+- `browser_navigate` - Open a URL and return a snapshot of the page's interactive elements
+- `browser_snapshot` - Re-read the current page's accessibility tree for fresh refs
+- `browser_click` - Click the element identified by an `@eN` ref
+- `browser_type` - Focus an element, clear it, and type into it
+- `browser_press` - Send a single named key (`Enter`, `Tab`, `Escape`, …) to whatever has focus
+- `browser_scroll` - Scroll the viewport up or down
+- `browser_vision` - Screenshot the current page for visual inspection
+
+**Configuration:**
+- `CUA_ENABLE_COMPUTER` - Register `computer_use` (default: `true`)
+- `CUA_ENABLE_BROWSER` - Register the `browser_*` tools (default: `true`). Setting both this and `CUA_ENABLE_COMPUTER` to `false` is a fatal error
+- `CUA_TOOLS` - Comma-separated list of tools to register, or `all` (default: all)
+- `CUA_DRIVER_CMD` - Path to the `cua-driver` binary (default: `cua-driver`)
+- `CUA_CHROME_PATH` - Chrome binary override (default: nib auto-discovers `/usr/bin/google-chrome`, then `/usr/bin/chromium`)
+- `CUA_BROWSER_PROFILE_DIR` - Chrome profile directory (default: `dante-browser-profile` under the user cache dir, i.e. `/home/cua/.cache/` in this image — it lives and dies with the container unless you mount a volume)
+- `CUA_ALLOW_PRIVATE_URLS` - Allow the browser to navigate to localhost and RFC1918 addresses (default: `false`)
+- `CUA_READY_TIMEOUT` - Budget for the startup readiness gate: X display wait, driver probe, and each upstream handshake (default: `60s`). Values that do not parse, or that are zero or negative, fall back to the default
+- `COGITO_LOG_LEVEL` / `LOG_FORMAT` - nib's log level and format (`json` for JSON). Logs always go to stderr; stdout carries only JSON-RPC
+
+Inherited from the base image, and useful:
+- `VNC_RESOLUTION` - Desktop resolution (default: `1024x768`). Raising it raises the token cost of every screenshot proportionally
+- `VNC_COL_DEPTH` - Colour depth (default: `24`)
+- `VNC_PW` - VNC password. **If unset, the VNC server runs with no authentication at all**
+- `VNC_PORT` / `NOVNC_PORT` - Ports for TigerVNC and noVNC (defaults: `5901`, `6901`)
+
+**Docker Image:**
+```bash
+docker run -i --rm -p 6901:6901 ghcr.io/mudler/mcps/cua:latest
+```
+
+Then open `http://localhost:6901` in a browser to watch the desktop live. Port `5901` is also exposed for a native VNC client; publish it only if you need it, and set `VNC_PW` when you do.
+
+The image is built with `make build MCP_SERVER=cua`, which uses `cua/Dockerfile` rather than the shared one.
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "cua": {
+          "command": "docker",
+          "args": [
+            "run", "-i", "--rm", "-p", "6901:6901",
+            "ghcr.io/mudler/mcps/cua:master"
+          ]
+        }
+      }
+    }
+```
+
+**Security posture:**
+
+This container is the security boundary, and it is a soft one. Treat it as disposable and keep it isolated.
+
+- **Chrome runs as root with `--no-sandbox`.** The whole container runs as root because supervisord needs it to drop privileges per program, and Chrome refuses to sandbox itself as root, so a wrapper on `/usr/bin/google-chrome` and `/usr/bin/chromium` passes `--no-sandbox`. A renderer compromise therefore yields root inside the container. This is a deliberate, accepted trade-off — dropping Chrome to an unprivileged user costs the shared X session and the AT-SPI tree that `computer_use` depends on.
+- **Do not run this container with `--network host` or host path mounts.** Given the point above, either one turns a browser compromise into a host compromise.
+- **The container is a real interactive desktop.** Anything reachable on its network is reachable by whatever the model drives — which is why `CUA_ALLOW_PRIVATE_URLS` defaults to `false` and why placing this container on a network with internal services deserves thought.
+- **noVNC and VNC are unauthenticated unless `VNC_PW` is set.** Anyone who can reach the published port has full keyboard and mouse control of the desktop. Bind them to localhost or leave them unpublished on shared hosts.
+- nib hard-blocks a small set of key combos (e.g. `cmd+ctrl+q`, `win+l`) and typed-text patterns (`curl … | bash`, `sudo rm -rf`, fork bombs). This is a guardrail against accidents, not a sandbox — there is no interactive approval prompt in this server.
+
+**Notes and limitations:**
+- **The image is large: roughly 6.4 GB**, of which about 5.7 GB is the `trycua/cua-xfce` base. Budget disk and pull time accordingly.
+- **The base image is `trycua/cua-xfce:latest`, unpinned**, as is Google's Chrome apt repository. A rebuild can therefore pick up a different desktop or a different Chrome than the last one did. The Chrome version actually shipped is recorded in the image at `/etc/cua-chrome-version`, and the build fails loudly if the base's `xstartup.sh` changes shape under the daemon injection.
+- **`/dev/uinput` is not available in a container**, so `cua-driver` injects input via `XSendEvent`. Right, middle, and double clicks may not register on some GTK and Qt applications. Clicks addressed by element index go through AT-SPI and are unaffected, which is why element-based addressing is preferred.
+- Startup takes tens of seconds: the desktop, then the accessibility bus, then the `cua-driver serve` daemon must all come up before the first tool call. The entrypoint waits up to 120s for the driver socket.
+- Only `linux/amd64` is built. `trycua` publishes the base for amd64 only, and Google ships no arm64 Chrome `.deb`; an arm64 build fails at the Chrome install step.
+
 ## Development
 
 ### Prerequisites
