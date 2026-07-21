@@ -71,16 +71,19 @@ func waitForDisplay(ctx context.Context, display string, timeout time.Duration) 
 // health_report tool, schema_version "1". Only the fields we key on are
 // modelled; unknown fields and unknown check names are tolerated by design,
 // per the tool's own stability note.
+// Only checks is modelled. The envelope also carries schema_version and
+// overall; both are deliberately ignored. overall aggregates every check, so an
+// unrelated failure would drag it to "degraded" while AT-SPI is fine, and it
+// never reaches "failed" for AT-SPI problems because ax_capability is not a
+// core check. schema_version is not gated either: refusing to parse a future
+// schema would reintroduce the very spurious warning this code exists to fix.
 type healthReport struct {
-	SchemaVersion string             `json:"schema_version"`
-	Overall       string             `json:"overall"`
-	Checks        []healthReportItem `json:"checks"`
+	Checks []healthReportItem `json:"checks"`
 }
 
 type healthReportItem struct {
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 // axCheckName is the canonical name of the accessibility check. It is present

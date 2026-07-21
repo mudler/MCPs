@@ -98,18 +98,22 @@ RUN install -d -o cua -g cua /home/cua/.cua-driver \
 # xstartup (a new program, different bus handling, a different XFCE
 # invocation): no build error, no runtime error, just a desktop quietly drifted
 # from what the base image expects. Injection inverts that failure mode. The
-# base's xstartup ends with a bare `wait`, and if a future base image no longer
-# does, the grep fails and takes the build down with a message -- loudly, at
-# build time, instead of silently at runtime. This matters more than usual
+# base's xstartup ends with exactly one bare `wait`, and if a future base image
+# no longer does -- none, or more than one, since sed substitutes globally and
+# two anchors would race two daemons over one socket -- the count check takes
+# the build down with a message: loudly, at build time, instead of silently at
+# runtime. This matters more than usual
 # because the FROM above is unpinned `:latest`.
 COPY cua/cua-driver-supervise.sh /usr/local/bin/cua-driver-supervise
 RUN chmod +x /usr/local/bin/cua-driver-supervise \
-    && { grep -qx 'wait' /usr/local/bin/xstartup.sh \
-        || { echo "ERROR: /usr/local/bin/xstartup.sh has no bare 'wait' line to anchor to." >&2; \
+    && { [ "$(grep -cx 'wait' /usr/local/bin/xstartup.sh)" = 1 ] \
+        || { echo "ERROR: expected exactly one bare 'wait' line in /usr/local/bin/xstartup.sh" >&2; \
+             echo "to anchor to; found $(grep -cx 'wait' /usr/local/bin/xstartup.sh)." >&2; \
              echo "The base image's xstartup.sh has changed shape; re-check the injection below." >&2; \
+             echo "Note sed substitutes globally: two anchors would start two daemons." >&2; \
              exit 1; }; } \
-    && sed -i 's|^wait$|cua-driver-supervise \&\nwait|' /usr/local/bin/xstartup.sh \
-    && grep -qx 'cua-driver-supervise &' /usr/local/bin/xstartup.sh
+    && sed -i 's|^wait$|/usr/local/bin/cua-driver-supervise \&\nwait|' /usr/local/bin/xstartup.sh \
+    && [ "$(grep -cx '/usr/local/bin/cua-driver-supervise &' /usr/local/bin/xstartup.sh)" = 1 ]
 
 COPY --from=builder /out/cua /usr/local/bin/cua
 COPY cua/entrypoint.sh /usr/local/bin/entrypoint.sh
