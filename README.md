@@ -1860,7 +1860,7 @@ mcp:
     }
 ```
 
-### 🏠 openHAB Server
+### 🏡 openHAB Server
 
 Read and control a home through [openHAB](https://www.openhab.org/)'s REST API:
 list items and their state, send commands, check whether the devices behind them

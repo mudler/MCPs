@@ -1,9 +1,20 @@
 package main
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+// bareToolNames lists every tool this server registers, without a prefix.
+// A description that names a sibling tool must render it with the
+// configured prefix, since that is the only name the caller can actually
+// invoke.
+var bareToolNames = []string{
+	"list_items", "get_item", "send_command", "update_item_state",
+	"list_things", "get_thing_status", "list_rules", "run_rule_now",
+}
 
 // toolNames lists the tools a configuration exposes.
 func toolNames(cfg Config) []string {
@@ -43,6 +54,25 @@ var _ = Describe("toolSpecs", func() {
 		srv := newServer(Config{ToolPrefix: "openhab_"}, &stubClient{})
 		for _, spec := range srv.toolSpecs() {
 			Expect(spec.description).ToNot(BeEmpty(), spec.name)
+		}
+	})
+
+	It("should never reference a sibling tool by its bare, unprefixed name", func() {
+		// The empty-prefix case is not exercised here: with no prefix the
+		// bare names ARE the registered names, so the assertion below would
+		// be vacuous for it.
+		for _, prefix := range []string{"openhab_", "house_"} {
+			srv := newServer(Config{ToolPrefix: prefix}, &stubClient{})
+			for _, spec := range srv.toolSpecs() {
+				for _, name := range bareToolNames {
+					// Strip every correctly prefixed occurrence first; whatever
+					// bare name remains after that is a cross-reference a model
+					// could not actually call under this configuration.
+					stripped := strings.ReplaceAll(spec.description, prefix+name, "")
+					Expect(stripped).ToNot(ContainSubstring(name),
+						"prefix %q: %s description references %q without the configured prefix", prefix, spec.name, name)
+				}
+			}
 		}
 	})
 })
