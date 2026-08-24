@@ -1438,12 +1438,14 @@ An SMB2/SMB3 server that talks to a Windows or Samba share over the network. It 
 - JSON schema validation for inputs/outputs
 
 **Tools:**
-- `list` - List the files and directories directly inside a directory on the share
-- `search` - Find files and directories by name, matching a glob such as `*.gguf` or plain text as a substring
-- `read` - Read a text file with line numbers, refusing binary and oversized files
-- `write` - Write content to a file, creating parent directories as needed
-- `move` - Move or rename a file or directory within the share
-- `delete` - Delete a file or directory, recursing only when asked
+- `samba_list` - List the files and directories directly inside a directory on the share
+- `samba_search` - Find files and directories by name, matching a glob such as `*.gguf` or plain text as a substring
+- `samba_read` - Read a text file with line numbers, refusing binary and oversized files
+- `samba_write` - Write content to a file, creating parent directories as needed
+- `samba_move` - Move or rename a file or directory within the share
+- `samba_delete` - Delete a file or directory, recursing only when asked
+
+The `samba_` prefix keeps these names clear of the filesystem server, which also registers `read` and `write`. Set `SMB_TOOL_PREFIX` to change it, for example `nas1_` when two shares are connected at once, or to an empty value for bare names.
 
 **Configuration:**
 
@@ -1458,17 +1460,18 @@ An SMB2/SMB3 server that talks to a Windows or Samba share over the network. It 
 | `SMB_READ_MAX_BYTES` | `1048576` | Largest file `read` will pull over the wire |
 | `SMB_READ_ONLY` | `false` | When true, only `list`, `search` and `read` are exposed |
 | `SMB_DISABLE_DELETE` | `false` | When true, `delete` is not exposed, and `write` and `move` refuse to overwrite anything |
+| `SMB_TOOL_PREFIX` | `samba_` | Prepended to every tool name; set it to an empty value for unprefixed names |
 
 `SMB_DISABLE_DELETE` protects existing data rather than just hiding one tool: with it set, writing over an existing file and moving onto an existing destination are both refused, because either would destroy the previous content.
 
-**List Input Format:**
+**List Input Format** (`samba_list`)**:**
 ```json
 {
   "path": "models/qwen"
 }
 ```
 
-**Search Input Format:**
+**Search Input Format** (`samba_search`)**:**
 ```json
 {
   "pattern": "*.gguf",
@@ -1480,7 +1483,7 @@ An SMB2/SMB3 server that talks to a Windows or Samba share over the network. It 
 
 Search matches names only, never file contents, so it stays cheap on a share full of large files. It reports `truncated` when it stopped at `max_results`.
 
-**Read Input Format:**
+**Read Input Format** (`samba_read`)**:**
 ```json
 {
   "path": "models/qwen/config.json",
@@ -1489,7 +1492,7 @@ Search matches names only, never file contents, so it stays cheap on a share ful
 }
 ```
 
-**Write Input Format:**
+**Write Input Format** (`samba_write`)**:**
 ```json
 {
   "path": "notes/todo.txt",
@@ -1497,7 +1500,7 @@ Search matches names only, never file contents, so it stays cheap on a share ful
 }
 ```
 
-**Move Input Format:**
+**Move Input Format** (`samba_move`)**:**
 ```json
 {
   "from": "notes/todo.txt",
@@ -1506,7 +1509,7 @@ Search matches names only, never file contents, so it stays cheap on a share ful
 }
 ```
 
-**Delete Input Format:**
+**Delete Input Format** (`samba_delete`)**:**
 ```json
 {
   "path": "archive",

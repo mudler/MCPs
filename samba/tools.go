@@ -19,10 +19,12 @@ type toolSpec struct {
 // never registered rather than registered-and-refusing, so a model does not
 // waste a call discovering it is not allowed.
 func (s *server) toolSpecs() []toolSpec {
+	prefix := s.cfg.ToolPrefix
+
 	specs := []toolSpec{
-		spec("list", listDescription, s.list),
-		spec("search", searchDescription, s.search),
-		spec("read", readDescription, s.read),
+		spec(prefix, "list", listDescription, s.list),
+		spec(prefix, "search", searchDescription, s.search),
+		spec(prefix, "read", readDescription, s.read),
 	}
 
 	if s.cfg.ReadOnly {
@@ -30,8 +32,8 @@ func (s *server) toolSpecs() []toolSpec {
 	}
 
 	specs = append(specs,
-		spec("write", writeDescription, s.write),
-		spec("move", moveDescription, s.move),
+		spec(prefix, "write", writeDescription, s.write),
+		spec(prefix, "move", moveDescription, s.move),
 	)
 
 	// SMB_DISABLE_DELETE hides the tool outright; the handlers of the tools
@@ -41,20 +43,22 @@ func (s *server) toolSpecs() []toolSpec {
 		return specs
 	}
 
-	return append(specs, spec("delete", deleteDescription, s.remove))
+	return append(specs, spec(prefix, "delete", deleteDescription, s.remove))
 }
 
 // spec captures one tool's registration, deferring the AddTool call so the
-// list can be inspected without an MCP server in hand.
+// list can be inspected without an MCP server in hand. The configured prefix
+// is applied here, so a tool is advertised and registered under one name.
 func spec[In, Out any](
-	name, description string,
+	prefix, name, description string,
 	handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error),
 ) toolSpec {
+	prefixed := prefix + name
 	return toolSpec{
-		name:        name,
+		name:        prefixed,
 		description: description,
 		add: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{Name: name, Description: description}, handler)
+			mcp.AddTool(server, &mcp.Tool{Name: prefixed, Description: description}, handler)
 		},
 	}
 }

@@ -7,10 +7,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// envMap turns a map into the getenv function loadConfig expects, so specs
-// never have to mutate the real process environment.
-func envMap(vars map[string]string) func(string) string {
-	return func(key string) string { return vars[key] }
+// envMap turns a map into the lookup function loadConfig expects, so specs
+// never have to mutate the real process environment. It reports whether a key
+// was present, which is how an explicitly empty value is told apart from an
+// unset one.
+func envMap(vars map[string]string) func(string) (string, bool) {
+	return func(key string) (string, bool) {
+		value, ok := vars[key]
+		return value, ok
+	}
 }
 
 var _ = Describe("loadConfig", func() {
@@ -157,6 +162,51 @@ var _ = Describe("loadConfig", func() {
 			Entry("false", "false", false),
 			Entry("empty", "", false),
 			Entry("nonsense", "maybe", false),
+		)
+
+		It("should default the tool prefix to samba_", func() {
+			cfg, err := loadConfig(envMap(map[string]string{
+				"SMB_HOST":  "nas.local",
+				"SMB_SHARE": "Data",
+			}))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.ToolPrefix).To(Equal("samba_"))
+		})
+
+		It("should take a custom tool prefix", func() {
+			cfg, err := loadConfig(envMap(map[string]string{
+				"SMB_HOST":        "nas.local",
+				"SMB_SHARE":       "Data",
+				"SMB_TOOL_PREFIX": "nas1_",
+			}))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.ToolPrefix).To(Equal("nas1_"))
+		})
+
+		It("should drop the prefix when SMB_TOOL_PREFIX is set to empty", func() {
+			cfg, err := loadConfig(envMap(map[string]string{
+				"SMB_HOST":        "nas.local",
+				"SMB_SHARE":       "Data",
+				"SMB_TOOL_PREFIX": "",
+			}))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.ToolPrefix).To(BeEmpty())
+		})
+
+		DescribeTable("rejects a prefix that would make an invalid tool name",
+			func(prefix string) {
+				_, err := loadConfig(envMap(map[string]string{
+					"SMB_HOST":        "nas.local",
+					"SMB_SHARE":       "Data",
+					"SMB_TOOL_PREFIX": prefix,
+				}))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("SMB_TOOL_PREFIX"))
+			},
+			Entry("a space", "nas 1_"),
+			Entry("a slash", "nas/"),
+			Entry("a dot", "nas."),
+			Entry("a colon", "nas:"),
 		)
 
 		It("should disable deletion when SMB_DISABLE_DELETE is truthy", func() {

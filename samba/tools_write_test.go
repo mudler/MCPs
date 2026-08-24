@@ -260,19 +260,48 @@ var _ = Describe("toolSpecs", func() {
 		return names
 	}
 
-	It("should expose every tool by default", func() {
-		Expect(specNames(Config{})).To(Equal([]string{"list", "search", "read", "write", "move", "delete"}))
+	// The prefix keeps these names from colliding with the filesystem server,
+	// which also registers read and write.
+	samba := Config{ToolPrefix: "samba_"}
+
+	It("should expose every tool, prefixed", func() {
+		Expect(specNames(samba)).To(Equal([]string{
+			"samba_list", "samba_search", "samba_read",
+			"samba_write", "samba_move", "samba_delete",
+		}))
 	})
 
 	It("should expose only the read-only tools when SMB_READ_ONLY is set", func() {
-		Expect(specNames(Config{ReadOnly: true})).To(Equal([]string{"list", "search", "read"}))
+		cfg := samba
+		cfg.ReadOnly = true
+		Expect(specNames(cfg)).To(Equal([]string{"samba_list", "samba_search", "samba_read"}))
 	})
 
 	It("should drop only delete when SMB_DISABLE_DELETE is set", func() {
-		Expect(specNames(Config{DisableDelete: true})).To(Equal([]string{"list", "search", "read", "write", "move"}))
+		cfg := samba
+		cfg.DisableDelete = true
+		Expect(specNames(cfg)).To(Equal([]string{
+			"samba_list", "samba_search", "samba_read", "samba_write", "samba_move",
+		}))
 	})
 
 	It("should stay read-only when both switches are set", func() {
-		Expect(specNames(Config{ReadOnly: true, DisableDelete: true})).To(Equal([]string{"list", "search", "read"}))
+		cfg := samba
+		cfg.ReadOnly = true
+		cfg.DisableDelete = true
+		Expect(specNames(cfg)).To(Equal([]string{"samba_list", "samba_search", "samba_read"}))
+	})
+
+	It("should apply a custom prefix to every tool", func() {
+		Expect(specNames(Config{ToolPrefix: "nas1_"})).To(Equal([]string{
+			"nas1_list", "nas1_search", "nas1_read",
+			"nas1_write", "nas1_move", "nas1_delete",
+		}))
+	})
+
+	It("should leave the names bare when the prefix is empty", func() {
+		Expect(specNames(Config{})).To(Equal([]string{
+			"list", "search", "read", "write", "move", "delete",
+		}))
 	})
 })

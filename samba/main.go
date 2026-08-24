@@ -22,7 +22,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := loadConfig(osGetenv)
+	cfg, err := loadConfig(osLookupEnv)
 	if err != nil {
 		return err
 	}
