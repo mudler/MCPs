@@ -65,6 +65,14 @@ var _ = Describe("thing and rule tools", func() {
 			Expect(out.Total).To(Equal(2))
 		})
 
+		It("should return an empty page for a page number too large to multiply out", func() {
+			_, out, err := srv.listThings(ctx, nil, listThingsInput{Page: hugePage})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Success).To(BeTrue())
+			Expect(out.Things).To(BeEmpty())
+			Expect(out.Total).To(Equal(2))
+		})
+
 		It("should report a client failure in the payload", func() {
 			stub.err = errors.New("connection refused")
 			_, out, err := srv.listThings(ctx, nil, listThingsInput{})
@@ -104,6 +112,14 @@ var _ = Describe("thing and rule tools", func() {
 			_, _, err := srv.listRules(ctx, nil, listRulesInput{FilterTag: "night"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stub.ruleTag).To(Equal("night"))
+		})
+
+		It("should return an empty page for a page number too large to multiply out", func() {
+			_, out, err := srv.listRules(ctx, nil, listRulesInput{Page: hugePage})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Success).To(BeTrue())
+			Expect(out.Rules).To(BeEmpty())
+			Expect(out.Total).To(Equal(1))
 		})
 	})
 

@@ -142,7 +142,22 @@ func paginationOf(page, pageSize int) (int, int, error) {
 }
 
 // pageOf slices one page out of rows, returning empty past the end.
+//
+// The bound is a division rather than the obvious comparison against
+// (page-1)*pageSize, because page arrives straight from the caller's JSON: a
+// large enough value overflows that multiplication, wraps negative, walks past
+// a start >= len(rows) guard and panics in the slice expression below. A panic
+// here is fatal — the MCP SDK does not recover in its serving path, so the
+// process dies and the session goes with it.
+//
+// Dividing cannot overflow, and once page-1 <= len(rows)/pageSize holds,
+// (page-1)*pageSize <= len(rows), so the multiplication that follows is safe.
+// The division is floored, so the page that starts exactly at len(rows) is
+// admitted by the guard and rejected by the start check instead.
 func pageOf[T any](rows []T, page, pageSize int) []T {
+	if page < 1 || pageSize < 1 || page-1 > len(rows)/pageSize {
+		return []T{}
+	}
 	start := (page - 1) * pageSize
 	if start >= len(rows) {
 		return []T{}
