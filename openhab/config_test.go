@@ -10,10 +10,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// env returns a getenv function backed by a map, so the specs never touch the
-// process environment.
-func env(pairs map[string]string) func(string) string {
-	return func(key string) string { return pairs[key] }
+// env returns a lookupEnv function backed by a map, so the specs never touch the
+// process environment. Presence is reported as well as value, because a variable
+// set to empty is not the same as one left unset.
+func env(pairs map[string]string) func(string) (string, bool) {
+	return func(key string) (string, bool) {
+		value, ok := pairs[key]
+		return value, ok
+	}
 }
 
 var _ = Describe("loadConfig", func() {
@@ -104,6 +108,44 @@ var _ = Describe("loadConfig", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.ReadOnly).To(BeTrue())
 		Expect(cfg.InsecureSkipVerify).To(BeTrue())
+	})
+
+	It("should default the tool prefix", func() {
+		cfg, err := loadConfig(env(map[string]string{
+			"OPENHAB_URL":       "http://openhab:8080",
+			"OPENHAB_API_TOKEN": "t",
+		}))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.ToolPrefix).To(Equal("openhab_"))
+	})
+
+	It("should accept a custom tool prefix", func() {
+		cfg, err := loadConfig(env(map[string]string{
+			"OPENHAB_URL":         "http://openhab:8080",
+			"OPENHAB_API_TOKEN":   "t",
+			"OPENHAB_TOOL_PREFIX": "house_",
+		}))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.ToolPrefix).To(Equal("house_"))
+	})
+
+	It("should treat an explicitly empty tool prefix as no prefix", func() {
+		cfg, err := loadConfig(env(map[string]string{
+			"OPENHAB_URL":         "http://openhab:8080",
+			"OPENHAB_API_TOKEN":   "t",
+			"OPENHAB_TOOL_PREFIX": "",
+		}))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.ToolPrefix).To(BeEmpty())
+	})
+
+	It("should reject a tool prefix with characters a tool name cannot carry", func() {
+		_, err := loadConfig(env(map[string]string{
+			"OPENHAB_URL":         "http://openhab:8080",
+			"OPENHAB_API_TOKEN":   "t",
+			"OPENHAB_TOOL_PREFIX": "open hab/",
+		}))
+		Expect(err).To(MatchError(ContainSubstring("OPENHAB_TOOL_PREFIX")))
 	})
 })
 

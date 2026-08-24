@@ -19,12 +19,14 @@ type toolSpec struct {
 // never registered rather than registered-and-refusing, so a model does not
 // waste a call discovering it is not allowed.
 func (s *server) toolSpecs() []toolSpec {
+	prefix := s.cfg.ToolPrefix
+
 	specs := []toolSpec{
-		spec("list_items", listItemsDescription, s.listItems),
-		spec("get_item", getItemDescription, s.getItem),
-		spec("list_things", listThingsDescription, s.listThings),
-		spec("get_thing_status", getThingStatusDescription, s.getThingStatus),
-		spec("list_rules", listRulesDescription, s.listRules),
+		spec(prefix, "list_items", listItemsDescription, s.listItems),
+		spec(prefix, "get_item", getItemDescription, s.getItem),
+		spec(prefix, "list_things", listThingsDescription, s.listThings),
+		spec(prefix, "get_thing_status", getThingStatusDescription, s.getThingStatus),
+		spec(prefix, "list_rules", listRulesDescription, s.listRules),
 	}
 
 	if s.cfg.ReadOnly {
@@ -32,23 +34,25 @@ func (s *server) toolSpecs() []toolSpec {
 	}
 
 	return append(specs,
-		spec("send_command", sendCommandDescription, s.sendCommand),
-		spec("update_item_state", updateStateDescription, s.updateState),
-		spec("run_rule_now", runRuleDescription, s.runRule),
+		spec(prefix, "send_command", sendCommandDescription, s.sendCommand),
+		spec(prefix, "update_item_state", updateStateDescription, s.updateState),
+		spec(prefix, "run_rule_now", runRuleDescription, s.runRule),
 	)
 }
 
 // spec captures one tool's registration, deferring the AddTool call so the
-// list can be inspected without an MCP server in hand.
+// list can be inspected without an MCP server in hand. The configured prefix
+// is applied here, so a tool is advertised and registered under one name.
 func spec[In, Out any](
-	name, description string,
+	prefix, name, description string,
 	handler func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error),
 ) toolSpec {
+	prefixed := prefix + name
 	return toolSpec{
-		name:        name,
+		name:        prefixed,
 		description: description,
 		add: func(server *mcp.Server) {
-			mcp.AddTool(server, &mcp.Tool{Name: name, Description: description}, handler)
+			mcp.AddTool(server, &mcp.Tool{Name: prefixed, Description: description}, handler)
 		},
 	}
 }

@@ -6,11 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
 
-const defaultTimeout = 30 * time.Second
+const (
+	defaultTimeout    = 30 * time.Second
+	defaultToolPrefix = "openhab_"
+)
+
+// validPrefix accepts what MCP clients accept in a tool name.
+var validPrefix = regexp.MustCompile(`^[A-Za-z0-9_-]*$`)
 
 // Config holds everything the server needs to reach an openHAB instance and
 // decide which tools it is allowed to expose.
@@ -35,11 +42,22 @@ type Config struct {
 
 	// ReadOnly drops the command, state and rule-run tools.
 	ReadOnly bool
+
+	// ToolPrefix is prepended to every tool name, so this server's tools do
+	// not collide with another server's.
+	ToolPrefix string
 }
 
-// loadConfig reads the configuration from getenv, which is os.Getenv in
-// production and a map lookup in the specs.
-func loadConfig(getenv func(string) string) (Config, error) {
+// loadConfig reads the configuration from lookupEnv, which is os.LookupEnv in
+// production and a map lookup in the specs. It reports presence as well as
+// value because OPENHAB_TOOL_PREFIX set to empty means "no prefix", which is
+// not the same as leaving it unset.
+func loadConfig(lookupEnv func(string) (string, bool)) (Config, error) {
+	getenv := func(key string) string {
+		value, _ := lookupEnv(key)
+		return value
+	}
+
 	cfg := Config{
 		Token:    strings.TrimSpace(getenv("OPENHAB_API_TOKEN")),
 		Username: strings.TrimSpace(getenv("OPENHAB_USERNAME")),
@@ -80,6 +98,15 @@ func loadConfig(getenv func(string) string) (Config, error) {
 		cfg.Timeout = timeout
 	}
 
+	cfg.ToolPrefix = defaultToolPrefix
+	if raw, ok := lookupEnv("OPENHAB_TOOL_PREFIX"); ok {
+		if !validPrefix.MatchString(raw) {
+			return Config{}, fmt.Errorf(
+				"OPENHAB_TOOL_PREFIX %q may only contain letters, digits, underscores and hyphens", raw)
+		}
+		cfg.ToolPrefix = raw
+	}
+
 	return cfg, nil
 }
 
@@ -115,3 +142,6 @@ func isTruthy(value string) bool {
 		return false
 	}
 }
+
+// osLookupEnv adapts os.LookupEnv to the signature loadConfig expects.
+func osLookupEnv(key string) (string, bool) { return os.LookupEnv(key) }

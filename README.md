@@ -1860,29 +1860,53 @@ mcp:
     }
 ```
 
-### openHAB
+### 🏠 openHAB Server
 
 Read and control a home through [openHAB](https://www.openhab.org/)'s REST API:
 list items and their state, send commands, check whether the devices behind them
 are online, and run rules.
 
+**Features:**
+- Read and control openHAB items, things and rules through the REST API
+- Filter items by name, label, type or tag, so the exact name is always found before acting on it
+- Distinguishes sending a command (acts on the device) from updating state (records a value without triggering rules)
+- Reports thing status, so a silent command can be diagnosed against the binding rather than guessed at
+- Read-only mode drops the command, state and rule-run tools entirely
+- Works against a self-signed or CA-bundled certificate
+- JSON schema validation for inputs/outputs
+
+**Tools:**
+- `openhab_list_items` - List items with their current state, filterable by name, label, type or tag
+- `openhab_get_item` - Get one item in full, including its tags and the groups it belongs to
+- `openhab_send_command` - Send a command to an item; travels through rules and bindings to the device
+- `openhab_update_item_state` - Set an item's state directly, without triggering rules
+- `openhab_list_things` - List things (the physical devices and bindings) with their status
+- `openhab_get_thing_status` - Get one thing's status, including why a binding reports it offline
+- `openhab_list_rules` - List rules with their status, optionally filtered by tag
+- `openhab_run_rule_now` - Run a rule immediately, as the 'run now' button in the openHAB UI does
+
+The `openhab_` prefix keeps these names clear of other servers — `get_item` would
+otherwise collide with the jellyfin server's tool of the same name. Set
+`OPENHAB_TOOL_PREFIX` to change it, or to an empty value for bare names.
+
+**Configuration:**
+
 | Variable | Default | Description |
 | --- | --- | --- |
-| `OPENHAB_URL` | required | Base URL, for example `http://openhab:8080` or `https://10.0.0.5:8443` |
-| `OPENHAB_API_TOKEN` | empty | openHAB API token; preferred over basic auth |
-| `OPENHAB_USERNAME` | empty | Basic-auth user, used when no token is set |
-| `OPENHAB_PASSWORD` | empty | Basic-auth password |
+| `OPENHAB_URL` | *required* | Base URL, for example `http://openhab:8080` or `https://10.0.0.5:8443` |
+| `OPENHAB_API_TOKEN` | empty | openHAB API token; satisfies the credential requirement on its own, and is preferred over basic auth when both are set |
+| `OPENHAB_USERNAME` | empty | Basic-auth user; only usable together with `OPENHAB_PASSWORD`, and only when no token is set |
+| `OPENHAB_PASSWORD` | empty | Basic-auth password; required alongside `OPENHAB_USERNAME` when no token is set |
 | `OPENHAB_TIMEOUT` | `30s` | Bounds every request |
 | `OPENHAB_CA_CERT` | empty | Path to a PEM bundle, for an instance behind a private CA |
 | `OPENHAB_INSECURE_SKIP_VERIFY` | `false` | Skip TLS verification entirely |
 | `OPENHAB_READ_ONLY` | `false` | When true, only the read tools are exposed |
+| `OPENHAB_TOOL_PREFIX` | `openhab_` | Prepended to every tool name; set it to an empty value for unprefixed names |
 
-Tools: `list_items`, `get_item`, `send_command`, `update_item_state`,
-`list_things`, `get_thing_status`, `list_rules`, `run_rule_now`.
-
-`send_command` sends a command, which travels through rules and bindings to the
-device. `update_item_state` sets an item's state without triggering rules. They
-are different acts and the server keeps them apart.
+Authentication is not optional: the server refuses to start unless you set
+`OPENHAB_API_TOKEN`, or both `OPENHAB_USERNAME` and `OPENHAB_PASSWORD`. Unlike the
+samba server's `SMB_USER`/`SMB_PASSWORD`, there is no guest path here — openHAB's
+REST API always requires one of the two.
 
 openHAB's default HTTPS certificate is self-signed and carries no
 `subjectAltName`, so no CA bundle can validate it — `OPENHAB_INSECURE_SKIP_VERIFY=true`
