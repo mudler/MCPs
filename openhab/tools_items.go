@@ -84,7 +84,7 @@ func (s *server) listItems(ctx context.Context, _ *mcp.CallToolRequest, input li
 }
 
 type getItemInput struct {
-	Name         string `json:"name" jsonschema:"the item name, exactly as list_items reports it"`
+	Name         string `json:"name" jsonschema:"the item name, exactly as the item listing reports it"`
 	WithMetadata bool   `json:"with_metadata,omitempty" jsonschema:"include the item's metadata namespaces"`
 }
 
@@ -102,23 +102,31 @@ func (s *server) getItem(ctx context.Context, _ *mcp.CallToolRequest, input getI
 ) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return nil, getItemOutput{Error: "name is required (the item name, as reported by list_items)"}, nil
+		return nil, getItemOutput{Error: s.requireItemName()}, nil
 	}
 
 	item, err := s.client.Item(ctx, name, input.WithMetadata)
 	if err != nil {
-		return nil, getItemOutput{Error: describeItemError(name, err)}, nil
+		return nil, getItemOutput{Error: s.describeItemError(name, err)}, nil
 	}
 
 	return nil, getItemOutput{Item: item, Success: true}, nil
 }
 
-// describeItemError turns a 404 into language a model can act on.
-func describeItemError(name string, err error) string {
+// describeItemError turns a 404 into language a model can act on. It is a
+// method rather than a free function so the listing tool it names carries the
+// configured prefix.
+func (s *server) describeItemError(name string, err error) string {
 	if errors.Is(err, errNotFound) {
-		return fmt.Sprintf("no item named %q; use list_items to find the exact name", name)
+		return fmt.Sprintf("no item named %q; use %s to find the exact name", name, s.tool("list_items"))
 	}
 	return err.Error()
+}
+
+// requireItemName is the message the three item tools share when the caller
+// omits the name.
+func (s *server) requireItemName() string {
+	return fmt.Sprintf("name is required (the item name, as reported by %s)", s.tool("list_items"))
 }
 
 // paginationOf validates and defaults the paging inputs.

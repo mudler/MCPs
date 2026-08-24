@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -10,7 +11,7 @@ import (
 // ThingSummary is the compact form returned by the thing listing. openHAB's
 // own payload carries every channel, which dwarfs the part that matters.
 type ThingSummary struct {
-	UID          string `json:"uid" jsonschema:"the thing UID, used by get_thing_status"`
+	UID          string `json:"uid" jsonschema:"the thing UID, used to ask for one thing's status"`
 	ThingTypeUID string `json:"thing_type_uid" jsonschema:"the binding and thing type, for example zwave:device"`
 	Label        string `json:"label" jsonschema:"human-readable label"`
 	Status       string `json:"status" jsonschema:"ONLINE, OFFLINE, UNINITIALIZED or similar"`
@@ -73,7 +74,7 @@ func (s *server) listThings(ctx context.Context, _ *mcp.CallToolRequest, input l
 }
 
 type getThingStatusInput struct {
-	UID string `json:"uid" jsonschema:"the thing UID, exactly as list_things reports it"`
+	UID string `json:"uid" jsonschema:"the thing UID, exactly as the thing listing reports it"`
 }
 
 type getThingStatusOutput struct {
@@ -92,7 +93,9 @@ func (s *server) getThingStatus(ctx context.Context, _ *mcp.CallToolRequest, inp
 ) {
 	uid := strings.TrimSpace(input.UID)
 	if uid == "" {
-		return nil, getThingStatusOutput{Error: "uid is required (the thing UID, as reported by list_things)"}, nil
+		return nil, getThingStatusOutput{
+			Error: fmt.Sprintf("uid is required (the thing UID, as reported by %s)", s.tool("list_things")),
+		}, nil
 	}
 
 	status, err := s.client.ThingStatus(ctx, uid)
@@ -105,7 +108,7 @@ func (s *server) getThingStatus(ctx context.Context, _ *mcp.CallToolRequest, inp
 
 // RuleSummary is the compact form returned by the rule listing.
 type RuleSummary struct {
-	UID         string   `json:"uid" jsonschema:"the rule UID, used by run_rule_now"`
+	UID         string   `json:"uid" jsonschema:"the rule UID, used to run the rule now"`
 	Name        string   `json:"name" jsonschema:"human-readable rule name"`
 	Description string   `json:"description,omitempty" jsonschema:"what the rule does, when the author wrote it down"`
 	Tags        []string `json:"tags,omitempty" jsonschema:"tags on the rule"`
@@ -165,7 +168,7 @@ func (s *server) listRules(ctx context.Context, _ *mcp.CallToolRequest, input li
 }
 
 type runRuleInput struct {
-	UID string `json:"uid" jsonschema:"the rule UID, exactly as list_rules reports it"`
+	UID string `json:"uid" jsonschema:"the rule UID, exactly as the rule listing reports it"`
 }
 
 type runRuleOutput struct {
@@ -182,7 +185,9 @@ func (s *server) runRule(ctx context.Context, _ *mcp.CallToolRequest, input runR
 ) {
 	uid := strings.TrimSpace(input.UID)
 	if uid == "" {
-		return nil, runRuleOutput{Error: "uid is required (the rule UID, as reported by list_rules)"}, nil
+		return nil, runRuleOutput{
+			Error: fmt.Sprintf("uid is required (the rule UID, as reported by %s)", s.tool("list_rules")),
+		}, nil
 	}
 
 	if err := s.client.RunRule(ctx, uid); err != nil {
