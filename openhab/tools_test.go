@@ -111,6 +111,51 @@ var _ = Describe("toolSpecs", func() {
 	})
 })
 
+// undescribed walks a JSON schema and returns the dotted paths of every
+// property that carries no description. Array element schemas are walked but
+// not required to describe themselves: the jsonschema tag on a []string field
+// describes the field, and there is nowhere to hang a description on a bare
+// string element.
+func undescribed(node any, path string) []string {
+	object, ok := node.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	var missing []string
+	if properties, ok := object["properties"].(map[string]any); ok {
+		for name, raw := range properties {
+			field, _ := raw.(map[string]any)
+			if text, _ := field["description"].(string); strings.TrimSpace(text) == "" {
+				missing = append(missing, path+"."+name)
+			}
+			missing = append(missing, undescribed(field, path+"."+name)...)
+		}
+	}
+	if items, ok := object["items"]; ok {
+		missing = append(missing, undescribed(items, path+"[]")...)
+	}
+	return missing
+}
+
+var _ = Describe("shipped schemas", func() {
+	It("should describe every field, however deeply nested", func() {
+		var tools []struct {
+			Name         string `json:"name"`
+			InputSchema  any    `json:"inputSchema"`
+			OutputSchema any    `json:"outputSchema"`
+		}
+		Expect(json.Unmarshal([]byte(listedTools(Config{ToolPrefix: "openhab_"})), &tools)).To(Succeed())
+
+		missing := []string{}
+		for _, tool := range tools {
+			missing = append(missing, undescribed(tool.InputSchema, tool.Name+".input")...)
+			missing = append(missing, undescribed(tool.OutputSchema, tool.Name+".output")...)
+		}
+		Expect(missing).To(BeEmpty())
+	})
+})
+
 var _ = Describe("error payloads", func() {
 	var (
 		stub *stubClient
