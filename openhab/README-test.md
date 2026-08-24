@@ -17,7 +17,9 @@ cover").
 | Variable | Purpose |
 | --- | --- |
 | `OPENHAB_URL` | The openHAB base URL, for example `https://your-instance:8443`. |
-| `OPENHAB_API_TOKEN` | An openHAB API token. Alternatively set `OPENHAB_USERNAME` and `OPENHAB_PASSWORD`. |
+| `OPENHAB_API_TOKEN` | An openHAB API token. Alternative to `OPENHAB_USERNAME`/`OPENHAB_PASSWORD`. |
+| `OPENHAB_USERNAME` | Basic-auth username, used together with `OPENHAB_PASSWORD` when no `OPENHAB_API_TOKEN` is set. |
+| `OPENHAB_PASSWORD` | Basic-auth password, required when `OPENHAB_USERNAME` is set. |
 | `OPENHAB_INSECURE_SKIP_VERIFY` | Set to `true` to skip TLS certificate verification. openHAB's stock self-signed certificate carries no `subjectAltName`, so no CA bundle can validate it against an IP address; this is the escape hatch for that. Unset by default, so verification is on. |
 | `OPENHAB_READ_ONLY` | Set to `true` to drop `send_command`, `update_item_state` and `run_rule_now` from the tool list entirely. |
 | `OPENHAB_TOOL_PREFIX` | Prepended to every tool name, default `openhab_`. Set it to an explicit empty string to get bare tool names (`list_items` instead of `openhab_list_items`). |
@@ -72,7 +74,7 @@ docker run -i --rm \
     -e OPENHAB_URL \
     -e OPENHAB_API_TOKEN \
     -e OPENHAB_INSECURE_SKIP_VERIFY=true \
-    ghcr.io/mudler/mcps/openhab:latest < /tmp/openhab-mcp-in &
+    ghcr.io/mudler/mcps/openhab:latest < /tmp/openhab-mcp-in > /tmp/openhab-mcp-out.json 2> /tmp/openhab-mcp-err.log &
 sleep 1
 {
   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"cli","version":"0"}}}'
@@ -81,10 +83,20 @@ sleep 1
   sleep 0.5
   echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
   sleep 1
+  echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"openhab_list_items","arguments":{"page_size":5}}}'
+  sleep 1
+  echo '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"openhab_list_things","arguments":{}}}'
+  sleep 1
 } > /tmp/openhab-mcp-in
 wait
 rm /tmp/openhab-mcp-in
+cat /tmp/openhab-mcp-out.json   # the JSON-RPC responses, one per line
+cat /tmp/openhab-mcp-err.log    # the container's log lines, kept separate
 ```
+
+This sends the same five messages as the primary pipe, so the FIFO path
+verifies the same thing Step 1 does: eight tools, real items, real things —
+not just the tool listing.
 
 ## What each step proves
 
