@@ -1425,6 +1425,132 @@ mcp:
     }
 ```
 
+### 🗄️ Samba Server
+
+An SMB2/SMB3 server that talks to a Windows or Samba share over the network. It connects to the share directly, so no `mount`, no `cifs-utils` and no privileged container are needed.
+
+**Features:**
+- Native SMB2/SMB3 client, no host mount required
+- Every path is relative to the share root and cannot escape it
+- Name-based recursive search that never downloads file contents
+- Reads refuse binary files and anything above a configurable size limit
+- Two independent safety switches: read-only, and deletion disabled
+- JSON schema validation for inputs/outputs
+
+**Tools:**
+- `list` - List the files and directories directly inside a directory on the share
+- `search` - Find files and directories by name, matching a glob such as `*.gguf` or plain text as a substring
+- `read` - Read a text file with line numbers, refusing binary and oversized files
+- `write` - Write content to a file, creating parent directories as needed
+- `move` - Move or rename a file or directory within the share
+- `delete` - Delete a file or directory, recursing only when asked
+
+**Configuration:**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SMB_HOST` | *required* | SMB server host, optionally with `:port` (default port 445) |
+| `SMB_SHARE` | *required* | Share name, for example `Data` |
+| `SMB_USER` | empty | Username; leave empty for a guest or anonymous session |
+| `SMB_PASSWORD` | empty | Password |
+| `SMB_DOMAIN` | empty | NTLM domain or workgroup |
+| `SMB_TIMEOUT` | `30s` | Bounds the connection and every operation |
+| `SMB_READ_MAX_BYTES` | `1048576` | Largest file `read` will pull over the wire |
+| `SMB_READ_ONLY` | `false` | When true, only `list`, `search` and `read` are exposed |
+| `SMB_DISABLE_DELETE` | `false` | When true, `delete` is not exposed, and `write` and `move` refuse to overwrite anything |
+
+`SMB_DISABLE_DELETE` protects existing data rather than just hiding one tool: with it set, writing over an existing file and moving onto an existing destination are both refused, because either would destroy the previous content.
+
+**List Input Format:**
+```json
+{
+  "path": "models/qwen"
+}
+```
+
+**Search Input Format:**
+```json
+{
+  "pattern": "*.gguf",
+  "path": "models",
+  "max_depth": 10,
+  "max_results": 100
+}
+```
+
+Search matches names only, never file contents, so it stays cheap on a share full of large files. It reports `truncated` when it stopped at `max_results`.
+
+**Read Input Format:**
+```json
+{
+  "path": "models/qwen/config.json",
+  "offset": 0,
+  "limit": 50
+}
+```
+
+**Write Input Format:**
+```json
+{
+  "path": "notes/todo.txt",
+  "content": "file content here"
+}
+```
+
+**Move Input Format:**
+```json
+{
+  "from": "notes/todo.txt",
+  "to": "archive/done.txt",
+  "overwrite": false
+}
+```
+
+**Delete Input Format:**
+```json
+{
+  "path": "archive",
+  "recursive": true
+}
+```
+
+**Docker Image:**
+```bash
+docker run -i --rm \
+  -e SMB_HOST=192.168.1.10 \
+  -e SMB_SHARE=Data \
+  -e SMB_USER=nasuser \
+  -e SMB_PASSWORD=secret \
+  ghcr.io/mudler/mcps/samba:latest
+```
+
+**LocalAI configuration (to add to the model config):**
+```yaml
+mcp:
+  stdio: |
+    {
+      "mcpServers": {
+        "samba": {
+          "command": "docker",
+          "env": {
+            "SMB_HOST": "192.168.1.10",
+            "SMB_SHARE": "Data",
+            "SMB_USER": "nasuser",
+            "SMB_PASSWORD": "secret",
+            "SMB_DISABLE_DELETE": "true"
+          },
+          "args": [
+            "run", "-i", "--rm",
+            "-e", "SMB_HOST", "-e", "SMB_SHARE",
+            "-e", "SMB_USER", "-e", "SMB_PASSWORD",
+            "-e", "SMB_DISABLE_DELETE",
+            "ghcr.io/mudler/mcps/samba:master"
+          ]
+        }
+      }
+    }
+```
+
 ### 🤖 Claude Server
 
 An MCP server for controlling Claude Code CLI sessions asynchronously. Start sessions, monitor progress, retrieve logs, and manage multiple concurrent Claude Code processes. It follows the same pattern as the opencode MCP server but is specifically designed for Claude Code.
