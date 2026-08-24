@@ -81,6 +81,9 @@ jobs:
           - mcp: jellyfin
             dockerfile: ./Dockerfile
             context: ./
+          - mcp: openhab
+            dockerfile: ./Dockerfile
+            context: ./
           - mcp: github
             dockerfile: ./Dockerfile
             context: ./

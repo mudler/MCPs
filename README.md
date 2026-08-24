@@ -1860,6 +1860,62 @@ mcp:
     }
 ```
 
+### openHAB
+
+Read and control a home through [openHAB](https://www.openhab.org/)'s REST API:
+list items and their state, send commands, check whether the devices behind them
+are online, and run rules.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `OPENHAB_URL` | required | Base URL, for example `http://openhab:8080` or `https://10.0.0.5:8443` |
+| `OPENHAB_API_TOKEN` | empty | openHAB API token; preferred over basic auth |
+| `OPENHAB_USERNAME` | empty | Basic-auth user, used when no token is set |
+| `OPENHAB_PASSWORD` | empty | Basic-auth password |
+| `OPENHAB_TIMEOUT` | `30s` | Bounds every request |
+| `OPENHAB_CA_CERT` | empty | Path to a PEM bundle, for an instance behind a private CA |
+| `OPENHAB_INSECURE_SKIP_VERIFY` | `false` | Skip TLS verification entirely |
+| `OPENHAB_READ_ONLY` | `false` | When true, only the read tools are exposed |
+
+Tools: `list_items`, `get_item`, `send_command`, `update_item_state`,
+`list_things`, `get_thing_status`, `list_rules`, `run_rule_now`.
+
+`send_command` sends a command, which travels through rules and bindings to the
+device. `update_item_state` sets an item's state without triggering rules. They
+are different acts and the server keeps them apart.
+
+openHAB's default HTTPS certificate is self-signed and carries no
+`subjectAltName`, so no CA bundle can validate it — `OPENHAB_INSECURE_SKIP_VERIFY=true`
+is the way to reach such an instance until its certificate is reissued.
+
+```bash
+docker run -i --rm \
+  -e OPENHAB_URL=https://10.0.0.5:8443 \
+  -e OPENHAB_API_TOKEN=oh.mytoken.xxxxx \
+  -e OPENHAB_INSECURE_SKIP_VERIFY=true \
+  ghcr.io/mudler/mcps/openhab:latest
+```
+
+```json
+{
+    "mcpServers": {
+        "openhab": {
+            "command": "docker",
+            "args": [
+                "run", "-i", "--rm",
+                "-e", "OPENHAB_URL",
+                "-e", "OPENHAB_API_TOKEN",
+                "ghcr.io/mudler/mcps/openhab:master"
+            ],
+            "env": {
+                "OPENHAB_URL": "http://your-openhab:8080",
+                "OPENHAB_API_TOKEN": "oh.mytoken.xxxxx"
+            }
+        }
+    }
+}
+```
+
 ### 🐙 GitHub Server
 
 A read-only GitHub MCP for reading issues and pull requests — their description, metadata, and discussion comments, plus the unified diff for PRs on request.
