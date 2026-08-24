@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -100,10 +101,19 @@ func (s *server) getThingStatus(ctx context.Context, _ *mcp.CallToolRequest, inp
 
 	status, err := s.client.ThingStatus(ctx, uid)
 	if err != nil {
-		return nil, getThingStatusOutput{UID: uid, Error: err.Error()}, nil
+		return nil, getThingStatusOutput{UID: uid, Error: s.describeThingError(uid, err)}, nil
 	}
 
 	return nil, getThingStatusOutput{UID: uid, Status: status, Success: true}, nil
+}
+
+// describeThingError turns a 404 into language a model can act on, the way
+// describeItemError does for items.
+func (s *server) describeThingError(uid string, err error) string {
+	if errors.Is(err, errNotFound) {
+		return fmt.Sprintf("no thing with UID %q; use %s to find the exact UID", uid, s.tool("list_things"))
+	}
+	return err.Error()
 }
 
 // RuleSummary is the compact form returned by the rule listing.

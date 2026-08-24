@@ -211,6 +211,12 @@ var _ = Describe("error payloads", func() {
 		namesTool(out.Error, "list_things")
 	})
 
+	It("should point an unknown thing at the prefixed listing tool", func() {
+		stub.err = fmt.Errorf("/rest/things/nope/status: %w", errNotFound)
+		_, out, _ := srv.getThingStatus(ctx, nil, getThingStatusInput{UID: "nope"})
+		namesTool(out.Error, "list_things")
+	})
+
 	It("should point a missing rule uid at the prefixed listing tool", func() {
 		_, out, _ := srv.runRule(ctx, nil, runRuleInput{})
 		namesTool(out.Error, "list_rules")

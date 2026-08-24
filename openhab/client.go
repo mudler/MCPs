@@ -115,6 +115,22 @@ func itemPath(name string) string {
 	return "/rest/items/" + url.PathEscape(name)
 }
 
+// thingPath builds the path for one thing, escaping the UID. openHAB UIDs are
+// colon-separated and PathEscape leaves a colon alone, so the readable form
+// survives. A '#' does not, which is the point: channel UIDs carry one, and
+// unescaped it truncates the path to /rest/things/<uid> — a real endpoint that
+// answers with a Thing, decodes into an empty status and gets reported as a
+// success. A '?' would graft a query onto the request the same way.
+func thingPath(uid string) string {
+	return "/rest/things/" + url.PathEscape(uid)
+}
+
+// rulePath builds the path for one rule, escaping the UID for the same reasons
+// thingPath does.
+func rulePath(uid string) string {
+	return "/rest/rules/" + url.PathEscape(uid)
+}
+
 func (c *restClient) Items(ctx context.Context) ([]Item, error) {
 	var items []Item
 	if err := c.getJSON(ctx, "/rest/items", nil, &items); err != nil {
@@ -157,7 +173,7 @@ func (c *restClient) Things(ctx context.Context) ([]Thing, error) {
 
 func (c *restClient) ThingStatus(ctx context.Context, uid string) (ThingStatus, error) {
 	var status ThingStatus
-	path := "/rest/things/" + uid + "/status"
+	path := thingPath(uid) + "/status"
 	if err := c.getJSON(ctx, path, nil, &status); err != nil {
 		return ThingStatus{}, err
 	}
@@ -177,6 +193,6 @@ func (c *restClient) Rules(ctx context.Context, tag string) ([]Rule, error) {
 }
 
 func (c *restClient) RunRule(ctx context.Context, uid string) error {
-	_, err := c.do(ctx, http.MethodPost, "/rest/rules/"+uid+"/runnow", nil, "")
+	_, err := c.do(ctx, http.MethodPost, rulePath(uid)+"/runnow", nil, "")
 	return err
 }

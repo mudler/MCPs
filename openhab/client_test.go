@@ -179,6 +179,43 @@ var _ = Describe("restClient", func() {
 		Expect(status.Status).To(Equal("ONLINE"))
 	})
 
+	It("should escape a thing UID that carries a fragment", func() {
+		// openHAB channel UIDs look like thing:uid:channel#group. Unescaped,
+		// the '#' truncates the request to /rest/things/astro:sun:home:rise,
+		// which answers with a Thing that decodes into an empty status.
+		var escaped, query string
+		server, client := newFakeOpenHAB(func(w http.ResponseWriter, r *http.Request) {
+			escaped = r.URL.EscapedPath()
+			query = r.URL.RawQuery
+			w.Write([]byte(`{"status":"ONLINE","statusDetail":"NONE","description":""}`))
+		})
+		defer server.Close()
+
+		_, err := client.ThingStatus(ctx, "astro:sun:home:rise#start")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(escaped).To(Equal("/rest/things/astro:sun:home:rise%23start/status"))
+		Expect(query).To(BeEmpty())
+	})
+
+	It("should escape a thing UID that would otherwise graft on a query or climb the path", func() {
+		var escaped, query string
+		server, client := newFakeOpenHAB(func(w http.ResponseWriter, r *http.Request) {
+			escaped = r.URL.EscapedPath()
+			query = r.URL.RawQuery
+			w.Write([]byte(`{}`))
+		})
+		defer server.Close()
+
+		_, err := client.ThingStatus(ctx, "x?q=1")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(escaped).To(Equal("/rest/things/x%3Fq=1/status"))
+		Expect(query).To(BeEmpty())
+
+		_, err = client.ThingStatus(ctx, "../../items/Foo")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(escaped).To(Equal("/rest/things/..%2F..%2Fitems%2FFoo/status"))
+	})
+
 	It("should pass a rule tag filter to openHAB", func() {
 		var query string
 		server, client := newFakeOpenHAB(func(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +243,18 @@ var _ = Describe("restClient", func() {
 		Expect(client.RunRule(ctx, "nightmode")).To(Succeed())
 		Expect(method).To(Equal(http.MethodPost))
 		Expect(path).To(Equal("/rest/rules/nightmode/runnow"))
+	})
+
+	It("should escape a rule UID", func() {
+		var escaped string
+		server, client := newFakeOpenHAB(func(w http.ResponseWriter, r *http.Request) {
+			escaped = r.URL.EscapedPath()
+			w.WriteHeader(http.StatusOK)
+		})
+		defer server.Close()
+
+		Expect(client.RunRule(ctx, "night#mode")).To(Succeed())
+		Expect(escaped).To(Equal("/rest/rules/night%23mode/runnow"))
 	})
 
 	It("should refuse an untrusted certificate by default", func() {

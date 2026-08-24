@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -88,6 +89,23 @@ var _ = Describe("thing and rule tools", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(out.Success).To(BeTrue())
 			Expect(out.Status.Status).To(Equal("ONLINE"))
+		})
+
+		It("should say plainly when the thing does not exist", func() {
+			stub.err = fmt.Errorf("/rest/things/nope/status: %w", errNotFound)
+			_, out, err := srv.getThingStatus(ctx, nil, getThingStatusInput{UID: "nope"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Success).To(BeFalse())
+			Expect(out.Error).To(ContainSubstring(`no thing with UID "nope"`))
+			Expect(out.Error).To(ContainSubstring("list_things"))
+		})
+
+		It("should report a client failure in the payload", func() {
+			stub.err = errors.New("connection refused")
+			_, out, err := srv.getThingStatus(ctx, nil, getThingStatusInput{UID: "astro:sun:home"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(out.Success).To(BeFalse())
+			Expect(out.Error).To(ContainSubstring("connection refused"))
 		})
 
 		It("should require a uid", func() {
