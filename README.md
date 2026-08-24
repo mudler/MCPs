@@ -1908,9 +1908,19 @@ Authentication is not optional: the server refuses to start unless you set
 samba server's `SMB_USER`/`SMB_PASSWORD`, there is no guest path here — openHAB's
 REST API always requires one of the two.
 
-openHAB's default HTTPS certificate is self-signed and carries no
-`subjectAltName`, so no CA bundle can validate it — `OPENHAB_INSECURE_SKIP_VERIFY=true`
-is the way to reach such an instance until its certificate is reissued.
+```bash
+docker run -i --rm \
+  -e OPENHAB_URL=http://openhab:8080 \
+  -e OPENHAB_API_TOKEN=oh.mytoken.xxxxx \
+  ghcr.io/mudler/mcps/openhab:latest
+```
+
+**Reaching a self-signed LAN instance:** openHAB's default HTTPS certificate is
+self-signed and carries no `subjectAltName`, so no CA bundle can validate it.
+Until that certificate is reissued, `OPENHAB_INSECURE_SKIP_VERIFY=true` is the
+only way in — and it drops certificate verification entirely, so use it on a
+trusted network and nowhere else. Prefer `OPENHAB_CA_CERT` whenever the
+instance has a certificate a bundle can actually validate.
 
 ```bash
 docker run -i --rm \

@@ -23,11 +23,11 @@ func env(pairs map[string]string) func(string) (string, bool) {
 var _ = Describe("loadConfig", func() {
 	It("should accept a URL and a token", func() {
 		cfg, err := loadConfig(env(map[string]string{
-			"OPENHAB_URL":       "https://10.9.0.26:8443",
+			"OPENHAB_URL":       "https://openhab:8443",
 			"OPENHAB_API_TOKEN": "oh.mcp.secret",
 		}))
 		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.BaseURL).To(Equal("https://10.9.0.26:8443"))
+		Expect(cfg.BaseURL).To(Equal("https://openhab:8443"))
 		Expect(cfg.Token).To(Equal("oh.mcp.secret"))
 		Expect(cfg.Timeout).To(Equal(30 * time.Second))
 		Expect(cfg.ReadOnly).To(BeFalse())
@@ -60,7 +60,7 @@ var _ = Describe("loadConfig", func() {
 
 	It("should reject a URL without a scheme", func() {
 		_, err := loadConfig(env(map[string]string{
-			"OPENHAB_URL":       "10.9.0.26:8443",
+			"OPENHAB_URL":       "openhab:8443",
 			"OPENHAB_API_TOKEN": "t",
 		}))
 		Expect(err).To(MatchError(ContainSubstring("http:// or https://")))
