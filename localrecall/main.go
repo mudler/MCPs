@@ -612,14 +612,14 @@ func getEntryWithCollection(ctx context.Context, collectionName, entry string, m
 	}
 
 	// Echo routes on URL.RawPath when it is set, while LocalRecall explicitly
-	// unescapes the entry parameter. Double-escaping entry keeps RawPath empty:
+	// unescapes the entry parameter. Escaping the whole path keeps RawPath empty:
 	// Echo sees the decoded collection and LocalRecall receives entry escaped once.
-	endpoint := fmt.Sprintf(
+	endpointURL := &url.URL{Path: fmt.Sprintf(
 		"/api/collections/%s/entries/%s",
-		url.PathEscape(collectionName),
-		url.PathEscape(url.PathEscape(entry)),
-	)
-	apiResp, err := makeRequest(ctx, "GET", endpoint, nil)
+		collectionName,
+		url.PathEscape(entry),
+	)}
+	apiResp, err := makeRequest(ctx, "GET", endpointURL.EscapedPath(), nil)
 	if err != nil {
 		return nil, GetEntryOutput{}, err
 	}

@@ -66,7 +66,7 @@ func TestGetEntryReturnsContentAndChunkCount(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
 		}
-		const wantPath = "/api/collections/project castrum/entries/70fb48f6%2Fmemory.md"
+		const wantPath = "/api/collections/project; castrum/entries/70fb48f6%2Fmemory.md"
 		if r.URL.Path != wantPath {
 			t.Errorf("path = %q, want %q", r.URL.Path, wantPath)
 		}
@@ -78,7 +78,7 @@ func TestGetEntryReturnsContentAndChunkCount(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"success": true,
 			"data": {
-				"collection": "project castrum",
+				"collection": "project; castrum",
 				"entry": "70fb48f6/memory.md",
 				"content": "Revision-ID: rev-42\nbody",
 				"chunk_count": 3
@@ -87,7 +87,7 @@ func TestGetEntryReturnsContentAndChunkCount(t *testing.T) {
 	}))
 
 	_, output, err := GetEntry(context.Background(), nil, GetEntryInput{
-		CollectionName:  "project castrum",
+		CollectionName:  "project; castrum",
 		Entry:           "70fb48f6/memory.md",
 		MaxContentChars: 4_000,
 	})
@@ -96,7 +96,7 @@ func TestGetEntryReturnsContentAndChunkCount(t *testing.T) {
 	}
 
 	want := GetEntryOutput{
-		Collection:       "project castrum",
+		Collection:       "project; castrum",
 		Entry:            "70fb48f6/memory.md",
 		Content:          content,
 		ChunkCount:       3,
