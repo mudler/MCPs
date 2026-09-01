@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +25,11 @@ var localRecallURL string
 var apiKey string
 var defaultCollectionName string
 var debugMode bool
+
+const (
+	defaultMaxContentChars = 4_000
+	maximumMaxContentChars = 100_000
+)
 
 // debugLog prints debug messages only when DEBUG=1 is set
 func debugLog(format string, args ...interface{}) {
@@ -84,6 +92,17 @@ type ListFilesInput struct {
 type ListFilesInputWithoutCollection struct {
 }
 
+type GetEntryInput struct {
+	CollectionName  string `json:"collection_name" jsonschema:"the name of the collection"`
+	Entry           string `json:"entry" jsonschema:"the stable key or filename of the entry"`
+	MaxContentChars int    `json:"max_content_chars,omitempty" jsonschema:"maximum number of content characters to return (default: 4000, maximum: 100000)"`
+}
+
+type GetEntryInputWithoutCollection struct {
+	Entry           string `json:"entry" jsonschema:"the stable key or filename of the entry"`
+	MaxContentChars int    `json:"max_content_chars,omitempty" jsonschema:"maximum number of content characters to return (default: 4000, maximum: 100000)"`
+}
+
 type DeleteEntryInput struct {
 	CollectionName string `json:"collection_name" jsonschema:"the name of the collection"`
 	Entry          string `json:"entry" jsonschema:"the filename of the entry to delete"`
@@ -125,13 +144,23 @@ type ListCollectionsOutput struct {
 type ListFilesOutput struct {
 	Collection string   `json:"collection" jsonschema:"the name of the collection"`
 	Entries    []string `json:"entries" jsonschema:"list of entry filenames"`
+	Keys       []string `json:"keys" jsonschema:"list of stable entry keys"`
 	Count      int      `json:"count" jsonschema:"number of entries"`
 }
 
+type GetEntryOutput struct {
+	Collection       string `json:"collection" jsonschema:"the name of the collection"`
+	Entry            string `json:"entry" jsonschema:"the stable key or filename of the entry"`
+	Content          string `json:"content" jsonschema:"entry content, possibly truncated to max_content_chars"`
+	ChunkCount       int    `json:"chunk_count" jsonschema:"number of chunks occupied by the complete entry"`
+	ContentLength    int    `json:"content_length" jsonschema:"number of characters in the complete entry content"`
+	ContentTruncated bool   `json:"content_truncated" jsonschema:"whether content was truncated to max_content_chars"`
+}
+
 type DeleteEntryOutput struct {
-	DeletedEntry    string   `json:"deleted_entry" jsonschema:"the filename of the deleted entry"`
+	DeletedEntry     string   `json:"deleted_entry" jsonschema:"the filename of the deleted entry"`
 	RemainingEntries []string `json:"remaining_entries" jsonschema:"list of remaining entry filenames"`
-	EntryCount      int      `json:"entry_count" jsonschema:"number of remaining entries"`
+	EntryCount       int      `json:"entry_count" jsonschema:"number of remaining entries"`
 }
 
 // makeRequest makes an HTTP request to the LocalRecall API
@@ -530,6 +559,15 @@ func listFilesWithCollection(ctx context.Context, collectionName string) (
 		}
 	}
 
+	keys := []string{}
+	if keysData, ok := data["keys"].([]interface{}); ok {
+		for _, k := range keysData {
+			if key, ok := k.(string); ok {
+				keys = append(keys, key)
+			}
+		}
+	}
+
 	count := 0
 	if countVal, ok := data["count"].(float64); ok {
 		count = int(countVal)
@@ -538,7 +576,99 @@ func listFilesWithCollection(ctx context.Context, collectionName string) (
 	output := ListFilesOutput{
 		Collection: collectionName,
 		Entries:    entries,
+		Keys:       keys,
 		Count:      count,
+	}
+
+	return nil, output, nil
+}
+
+// GetEntry gets an entry's content and chunk count from a collection.
+func GetEntry(ctx context.Context, req *mcp.CallToolRequest, input GetEntryInput) (
+	*mcp.CallToolResult,
+	GetEntryOutput,
+	error,
+) {
+	return getEntryWithCollection(ctx, input.CollectionName, input.Entry, input.MaxContentChars)
+}
+
+// GetEntryWithoutCollection gets an entry using the default collection.
+func GetEntryWithoutCollection(ctx context.Context, req *mcp.CallToolRequest, input GetEntryInputWithoutCollection) (
+	*mcp.CallToolResult,
+	GetEntryOutput,
+	error,
+) {
+	return getEntryWithCollection(ctx, defaultCollectionName, input.Entry, input.MaxContentChars)
+}
+
+// getEntryWithCollection is the internal implementation for getting an entry.
+func getEntryWithCollection(ctx context.Context, collectionName, entry string, maxContentChars int) (
+	*mcp.CallToolResult,
+	GetEntryOutput,
+	error,
+) {
+	if maxContentChars < 0 {
+		return nil, GetEntryOutput{}, fmt.Errorf("max_content_chars must not be negative")
+	}
+
+	// Echo routes on URL.RawPath when it is set, while LocalRecall explicitly
+	// unescapes the entry parameter. Escaping the whole path keeps RawPath empty:
+	// Echo sees the decoded collection and LocalRecall receives entry escaped once.
+	endpointURL := &url.URL{Path: fmt.Sprintf(
+		"/api/collections/%s/entries/%s",
+		collectionName,
+		url.PathEscape(entry),
+	)}
+	apiResp, err := makeRequest(ctx, "GET", endpointURL.EscapedPath(), nil)
+	if err != nil {
+		return nil, GetEntryOutput{}, err
+	}
+
+	data, ok := apiResp.Data.(map[string]interface{})
+	if !ok {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format")
+	}
+
+	content, ok := data["content"].(string)
+	if !ok {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: content is missing or not a string")
+	}
+	chunkCountValue, ok := data["chunk_count"].(float64)
+	if !ok {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count is missing or not a number")
+	}
+	if chunkCountValue < 0 {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count must be a non-negative integer")
+	}
+	if math.Trunc(chunkCountValue) != chunkCountValue {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count must be a non-negative integer")
+	}
+	if chunkCountValue >= float64(uint64(1)<<(strconv.IntSize-1)) {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count is out of range")
+	}
+	chunkCount := int(chunkCountValue)
+
+	contentRunes := []rune(content)
+	contentTruncated := false
+	returnedContent := content
+	if maxContentChars == 0 {
+		maxContentChars = defaultMaxContentChars
+	}
+	if maxContentChars > maximumMaxContentChars {
+		maxContentChars = maximumMaxContentChars
+	}
+	if maxContentChars > 0 && len(contentRunes) > maxContentChars {
+		returnedContent = string(contentRunes[:maxContentChars])
+		contentTruncated = true
+	}
+
+	output := GetEntryOutput{
+		Collection:       collectionName,
+		Entry:            entry,
+		Content:          returnedContent,
+		ChunkCount:       chunkCount,
+		ContentLength:    len(contentRunes),
+		ContentTruncated: contentTruncated,
 	}
 
 	return nil, output, nil
@@ -608,7 +738,7 @@ func deleteEntryWithCollection(ctx context.Context, collectionName, entry string
 	return nil, output, nil
 }
 
-func main() {
+func newServer() *mcp.Server {
 	// Check for debug mode
 	debugMode = os.Getenv("DEBUG") == "1"
 
@@ -638,6 +768,7 @@ func main() {
 		"add_document":      true,
 		"list_collections":  true,
 		"list_files":        true,
+		"get_entry":         true,
 		"delete_entry":      true,
 	}
 
@@ -744,6 +875,23 @@ func main() {
 		}
 	}
 
+	if enabledTools["get_entry"] {
+		if defaultCollectionName != "" {
+			desc := fmt.Sprintf("Get an entry's content and chunk count from LocalRecall collection '%s'", defaultCollectionName)
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "get_entry",
+				Description: desc,
+			}, GetEntryWithoutCollection)
+			debugLog("Tool 'get_entry' enabled (using default collection: %s)", defaultCollectionName)
+		} else {
+			mcp.AddTool(server, &mcp.Tool{
+				Name:        "get_entry",
+				Description: "Get an entry's content and chunk count from a LocalRecall collection",
+			}, GetEntry)
+			debugLog("Tool 'get_entry' enabled")
+		}
+	}
+
 	if enabledTools["delete_entry"] {
 		if defaultCollectionName != "" {
 			desc := fmt.Sprintf("Delete an entry from LocalRecall collection '%s'", defaultCollectionName)
@@ -768,6 +916,11 @@ func main() {
 		debugLog("Enabled %d tool(s)", len(enabledTools))
 	}
 
+	return server
+}
+
+func main() {
+	server := newServer()
 	// Run the server
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)

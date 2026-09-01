@@ -847,6 +847,7 @@ A knowledge base management server that provides tools to interact with [LocalRe
 - Create and reset collections
 - Add documents to collections
 - List collections and files
+- Retrieve entry content and chunk counts
 - Delete entries from collections
 - Configurable tool enablement for security
 
@@ -857,15 +858,16 @@ A knowledge base management server that provides tools to interact with [LocalRe
 - `add_document` - Add a document to a collection
 - `list_collections` - List all collections
 - `list_files` - List files in a collection
+- `get_entry` - Get an entry's content and chunk count
 - `delete_entry` - Delete an entry from a collection
 
 **Configuration:**
 - `LOCALRECALL_URL` - Base URL for LocalRecall API (default: `http://localhost:8080`)
 - `LOCALRECALL_API_KEY` - Optional API key for authentication (sent as `Authorization: Bearer <key>`)
 - `LOCALRECALL_COLLECTION` - Default collection name (if set, tools are registered without `collection_name` parameter - the collection is automatically used from the environment variable)
-- `LOCALRECALL_ENABLED_TOOLS` - Comma-separated list of tools to enable (default: all tools enabled). Valid values: `search`, `create_collection`, `reset_collection`, `add_document`, `list_collections`, `list_files`, `delete_entry`
+- `LOCALRECALL_ENABLED_TOOLS` - Comma-separated list of tools to enable (default: all tools enabled). Valid values: `search`, `create_collection`, `reset_collection`, `add_document`, `list_collections`, `list_files`, `get_entry`, `delete_entry`
 
-**Note:** When `LOCALRECALL_COLLECTION` is set, the tools `search`, `add_document`, `list_files`, and `delete_entry` are registered with different input schemas that do not include the `collection_name` parameter. The collection name is automatically taken from the environment variable.
+**Note:** When `LOCALRECALL_COLLECTION` is set, the tools `search`, `add_document`, `list_files`, `get_entry`, and `delete_entry` are registered with different input schemas that do not include the `collection_name` parameter. The collection name is automatically taken from the environment variable.
 
 **Search Input Format:**
 
@@ -943,6 +945,41 @@ When `LOCALRECALL_COLLECTION` is set, the tool schema has no parameters (empty o
 {}
 ```
 
+`list_files` returns both display-friendly `entries` and stable `keys`. Pass a stable key to `get_entry` when available.
+
+**Get Entry Input Format:**
+
+When `LOCALRECALL_COLLECTION` is **not** set:
+```json
+{
+  "collection_name": "myCollection",
+  "entry": "70fb48f6/document.txt",
+  "max_content_chars": 4000
+}
+```
+
+When `LOCALRECALL_COLLECTION` is set, the tool schema does not include `collection_name`:
+```json
+{
+  "entry": "70fb48f6/document.txt",
+  "max_content_chars": 4000
+}
+```
+
+`max_content_chars` defaults to 4,000 and is capped at 100,000. Truncation is Unicode-safe.
+
+**Get Entry Output Format:**
+```json
+{
+  "collection": "myCollection",
+  "entry": "70fb48f6/document.txt",
+  "content": "Revision-ID: rev-42\n...",
+  "chunk_count": 3,
+  "content_length": 7821,
+  "content_truncated": true
+}
+```
+
 **Delete Entry Input Format:**
 
 When `LOCALRECALL_COLLECTION` is **not** set:
@@ -970,7 +1007,7 @@ docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_API_KEY=your-
 docker run -e LOCALRECALL_URL=http://localhost:8080 -e LOCALRECALL_COLLECTION=myCollection ghcr.io/mudler/mcps/localrecall:latest
 ```
 
-When `LOCALRECALL_COLLECTION` is set, the collection-specific tools (`search`, `add_document`, `list_files`, `delete_entry`) are automatically configured to use that collection, and the `collection_name` parameter is removed from their input schemas.
+When `LOCALRECALL_COLLECTION` is set, the collection-specific tools (`search`, `add_document`, `list_files`, `get_entry`, `delete_entry`) are automatically configured to use that collection, and the `collection_name` parameter is removed from their input schemas.
 
 **Enable specific tools only:**
 ```bash
@@ -2242,4 +2279,3 @@ mcp:
 ```
 
 For more details, see the [sub-agent README](./sub-agent/README.md).
-
