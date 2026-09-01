@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -609,10 +611,13 @@ func getEntryWithCollection(ctx context.Context, collectionName, entry string, m
 		return nil, GetEntryOutput{}, fmt.Errorf("max_content_chars must not be negative")
 	}
 
+	// Echo routes on URL.RawPath when it is set, while LocalRecall explicitly
+	// unescapes the entry parameter. Double-escaping entry keeps RawPath empty:
+	// Echo sees the decoded collection and LocalRecall receives entry escaped once.
 	endpoint := fmt.Sprintf(
 		"/api/collections/%s/entries/%s",
 		url.PathEscape(collectionName),
-		url.PathEscape(entry),
+		url.PathEscape(url.PathEscape(entry)),
 	)
 	apiResp, err := makeRequest(ctx, "GET", endpoint, nil)
 	if err != nil {
@@ -624,11 +629,24 @@ func getEntryWithCollection(ctx context.Context, collectionName, entry string, m
 		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format")
 	}
 
-	content, _ := data["content"].(string)
-	chunkCount := 0
-	if countVal, ok := data["chunk_count"].(float64); ok {
-		chunkCount = int(countVal)
+	content, ok := data["content"].(string)
+	if !ok {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: content is missing or not a string")
 	}
+	chunkCountValue, ok := data["chunk_count"].(float64)
+	if !ok {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count is missing or not a number")
+	}
+	if chunkCountValue < 0 {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count must be a non-negative integer")
+	}
+	if math.Trunc(chunkCountValue) != chunkCountValue {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count must be a non-negative integer")
+	}
+	if chunkCountValue >= float64(uint64(1)<<(strconv.IntSize-1)) {
+		return nil, GetEntryOutput{}, fmt.Errorf("unexpected response data format: chunk_count is out of range")
+	}
+	chunkCount := int(chunkCountValue)
 
 	contentRunes := []rune(content)
 	contentTruncated := false

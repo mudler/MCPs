@@ -66,9 +66,12 @@ func TestGetEntryReturnsContentAndChunkCount(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
 		}
-		const wantPath = "/api/collections/project%20castrum/entries/70fb48f6%2Fmemory.md"
-		if r.URL.EscapedPath() != wantPath {
-			t.Errorf("escaped path = %q, want %q", r.URL.EscapedPath(), wantPath)
+		const wantPath = "/api/collections/project castrum/entries/70fb48f6%2Fmemory.md"
+		if r.URL.Path != wantPath {
+			t.Errorf("path = %q, want %q", r.URL.Path, wantPath)
+		}
+		if r.URL.RawPath != "" {
+			t.Errorf("raw path = %q, want empty so Echo routes the decoded collection name", r.URL.RawPath)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -232,6 +235,62 @@ func TestGetEntryRejectsNegativeContentLimit(t *testing.T) {
 	}
 }
 
+func TestGetEntryRejectsInvalidProofFieldsInSuccessfulResponse(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]interface{}
+	}{
+		{
+			name: "missing content",
+			data: map[string]interface{}{"chunk_count": 3},
+		},
+		{
+			name: "non-string content",
+			data: map[string]interface{}{"content": 42, "chunk_count": 3},
+		},
+		{
+			name: "missing chunk count",
+			data: map[string]interface{}{"content": "Revision-ID: rev-42"},
+		},
+		{
+			name: "non-number chunk count",
+			data: map[string]interface{}{"content": "Revision-ID: rev-42", "chunk_count": "3"},
+		},
+		{
+			name: "negative chunk count",
+			data: map[string]interface{}{"content": "Revision-ID: rev-42", "chunk_count": -1},
+		},
+		{
+			name: "fractional chunk count",
+			data: map[string]interface{}{"content": "Revision-ID: rev-42", "chunk_count": 1.5},
+		},
+		{
+			name: "out-of-range chunk count",
+			data: map[string]interface{}{"content": "Revision-ID: rev-42", "chunk_count": 1e100},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			useLocalRecallHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": true,
+					"data":    test.data,
+				})
+			}))
+
+			_, _, err := GetEntry(context.Background(), nil, GetEntryInput{
+				CollectionName: "project",
+				Entry:          "memory.md",
+			})
+			if err == nil {
+				t.Fatal("GetEntry() error = nil, want a response-format error")
+			}
+		})
+	}
+}
+
 func TestGetEntryWithoutCollectionUsesConfiguredCollection(t *testing.T) {
 	useLocalRecallHTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const wantPath = "/api/collections/project%20castrum/entries/memory.md"
@@ -327,12 +386,86 @@ func TestNewServerRegistersGetEntryWithTheConfiguredCollectionSchema(t *testing.
 			if hasCollectionName != test.wantCollectionName {
 				t.Errorf("get_entry schema has collection_name = %t, want %t", hasCollectionName, test.wantCollectionName)
 			}
-			for _, name := range []string{"entry", "max_content_chars"} {
-				if _, ok := properties[name]; !ok {
-					t.Errorf("get_entry schema is missing %q", name)
-				}
+			wantInputTypes := map[string]string{
+				"entry":             "string",
+				"max_content_chars": "integer",
 			}
+			wantRequiredInput := []string{"entry"}
+			if test.wantCollectionName {
+				wantInputTypes["collection_name"] = "string"
+				wantRequiredInput = append(wantRequiredInput, "collection_name")
+			}
+			assertSchemaPropertyTypes(t, schema, wantInputTypes)
+			assertSchemaRequiredFields(t, schema, wantRequiredInput)
+
+			outputSchema, ok := tools[0].OutputSchema.(map[string]interface{})
+			if !ok {
+				t.Fatalf("get_entry output schema has type %T, want map[string]interface{}", tools[0].OutputSchema)
+			}
+			wantOutputTypes := map[string]string{
+				"collection":        "string",
+				"entry":             "string",
+				"content":           "string",
+				"chunk_count":       "integer",
+				"content_length":    "integer",
+				"content_truncated": "boolean",
+			}
+			assertSchemaPropertyTypes(t, outputSchema, wantOutputTypes)
+			assertSchemaRequiredFields(t, outputSchema, []string{
+				"collection",
+				"entry",
+				"content",
+				"chunk_count",
+				"content_length",
+				"content_truncated",
+			})
 		})
+	}
+}
+
+func assertSchemaPropertyTypes(t *testing.T, schema map[string]interface{}, want map[string]string) {
+	t.Helper()
+
+	properties, ok := schema["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("schema properties have type %T, want map[string]interface{}", schema["properties"])
+	}
+	if len(properties) != len(want) {
+		t.Errorf("schema has %d properties, want %d", len(properties), len(want))
+	}
+	for name, wantType := range want {
+		property, ok := properties[name].(map[string]interface{})
+		if !ok {
+			t.Errorf("schema property %q has type %T, want map[string]interface{}", name, properties[name])
+			continue
+		}
+		if gotType, _ := property["type"].(string); gotType != wantType {
+			t.Errorf("schema property %q type = %q, want %q", name, gotType, wantType)
+		}
+	}
+}
+
+func assertSchemaRequiredFields(t *testing.T, schema map[string]interface{}, want []string) {
+	t.Helper()
+
+	required, ok := schema["required"].([]interface{})
+	if !ok {
+		t.Fatalf("schema required fields have type %T, want []interface{}", schema["required"])
+	}
+	gotSet := make(map[string]bool, len(required))
+	for _, value := range required {
+		name, ok := value.(string)
+		if !ok {
+			t.Fatalf("schema required field has type %T, want string", value)
+		}
+		gotSet[name] = true
+	}
+	wantSet := make(map[string]bool, len(want))
+	for _, name := range want {
+		wantSet[name] = true
+	}
+	if !reflect.DeepEqual(gotSet, wantSet) {
+		t.Errorf("schema required fields = %#v, want %#v", gotSet, wantSet)
 	}
 }
 
